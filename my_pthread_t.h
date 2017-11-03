@@ -33,6 +33,13 @@ typedef uint my_pthread_t;
 including the header file. */
 extern my_pthread_t current_thread;
 
+/* Tokens for values in my_pthread.c will be declared here, so that
+they can be accessed by other libraries. */
+#define MEM 16384 //Amount of memory used for a new context stack
+#define NUM_PRIORITY_LEVELS 5 //number of priority levels
+#define MAX_NUM_THREADS 64 //max number of threads allowed at once
+#define QUANTA_LENGTH 25
+
 /* Our own enums describing thread status. */
 enum threadStatus {
 	THREAD_RUNNING = 0,
