@@ -1,14 +1,11 @@
-/*
- * CS214 Systems Programming
- * Joseph Gormley 
- * mymalloc.h
- */
+// name: Bruno J. Lucarelli
+//       Joseph Gormley
+//       Alex Marek
+// username of iLab: bjl145
+// iLab Server: man.cs.rutgers.edu
 
-
-static char myblock[5000];
-
-#define malloc(x) mymalloc(x, __FILE__,__LINE__)
-#define free(x) myfree( x, __FILE__, __LINE__ )
+#define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
+#define free(x) mydeallocate(x, __FILE__, __LINE__, THREADREQ)
 
 void *mymalloc(int size, char *file, int line);
 

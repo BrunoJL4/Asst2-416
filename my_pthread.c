@@ -142,7 +142,7 @@ int my_pthread_create(my_pthread_t *thread, pthread_attr_t * attr, void *(*funct
 		//take the ID
 		tid = ptr->tid;
 		//free the pnode for the recycled ID
-		free(ptr);
+		free(ptr, __FILE__,__LINE__, LIBRARY);
 		//make a new TCB from the gathered information
 		tcb *newTcb = createTcb(tid, context, function);
 		//change the tcb instance in tcbList[id] to this tcb
@@ -296,7 +296,7 @@ int my_pthread_mutex_lock(my_pthread_mutex_t *mutex) {
 	//NOTE: yield should set this thread status to BLOCKED
 	if (mutex->status == LOCKED) {
 		//Create pnode of current thread
-		pnode *new = malloc(sizeof(pnode));
+		pnode *new = myallocate(sizeof(pnode), __FILE__, __LINE__, 0);
 		new->tid = current_thread;
 		new->next = NULL;
 		//start a waitQueue if it is empty
@@ -354,7 +354,7 @@ int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) {
 	mutex->waitQueue = mutex->waitQueue->next;
 	//make this thread ready so it can now acquire this lock
 	tcbList[(uint) ptr->tid]->status = THREAD_READY;
-	free(ptr);
+	free(ptr, __FILE__, __LINE__, LIBRARY);
 //	printf("finished my_pthread_mutex_unlock()!\n");
 	return 0;
 }
@@ -410,16 +410,16 @@ int maintenanceHelper() {
 		// if a runQueue thread's status is THREAD_DONE:
 		if(currTcb->status == THREAD_DONE) {
 			// deallocate the current thread's stack
-			free(currTcb->stack);
+			free(currTcb->stack, __FILE__, __LINE__, LIBRARY);
 			// deallocate the thread's tcb through tcbList
-			free(currTcb);
+			free(currTcb, __FILE__, __LINE__, LIBRARY);
 			// set tcbList[tid] to NULL
 			tcbList[(uint)currId] = NULL;
 			// then deallocate its pnode in the run queue while
 			// moving currPnode to the next node.
 			pnode *temp = currPnode;
 			currPnode = currPnode->next;
-			free(temp);
+			free(temp, __FILE__, __LINE__, LIBRARY);
 		}
 		// if a runQueue thread's status is THREAD_INTERRUPTED:
 		else if(currTcb->status == THREAD_INTERRUPTED) {
@@ -700,8 +700,8 @@ int init_manager_thread() {
 	printf("Using my_pthread implementation!\n");
 	// initialize global variables before adding Main's thread
 	// to the manager
-	MLPQ = malloc(NUM_PRIORITY_LEVELS * (sizeof(pnode)));
-	tcbList = malloc(MAX_NUM_THREADS * (sizeof(tcb)));
+	MLPQ = myallocate(NUM_PRIORITY_LEVELS * (sizeof(pnode)), __FILE__, __LINE__, LIBRARY);
+	tcbList = myallocate(MAX_NUM_THREADS * (sizeof(tcb)), __FILE__, __LINE__, LIBRARY);
 	// we must be inside of Main, so set current_thread to 0.
 	current_thread = 0;
 	int i;
@@ -730,7 +730,7 @@ int init_manager_thread() {
 	getcontext(&Manager);
 	// this is the stack that will be used by the manager context
 	// point the manager's stack pointer to the manager_stack we just set
-	Manager.uc_stack.ss_sp = malloc(MEM);
+	Manager.uc_stack.ss_sp = myallocate(MEM, __FILE__, __LINE__, LIBRARY);
 	// set the manager's stack size to MEM
 	Manager.uc_stack.ss_size = MEM;
 	// no other context will resume after the manager leaves
@@ -747,7 +747,7 @@ int init_manager_thread() {
 
 tcb *createTcb(my_pthread_t tid, ucontext_t context, void *(*function)(void*)) {
 	// allocate memory for tcb instance
-	tcb *ret = malloc(sizeof(tcb));
+	tcb *ret = myallocate(sizeof(tcb), __FILE__, __LINE__, LIBRARY);
 	// set members to inputs
 	ret->status = THREAD_READY;
 	ret->tid = tid;
@@ -762,7 +762,7 @@ tcb *createTcb(my_pthread_t tid, ucontext_t context, void *(*function)(void*)) {
 	ret->valuePtr = NULL;
 	// cyclesWaited is 0 by default
 	ret->cyclesWaited = 0;
-	char *stack = malloc(MEM);
+	char *stack = myallocate(MEM, __FILE__, __LINE__, LIBRARY);
 	// initialize stack properties of context
 	ret->context.uc_stack.ss_sp = stack;
 	ret->context.uc_stack.ss_size = MEM;
@@ -773,7 +773,7 @@ tcb *createTcb(my_pthread_t tid, ucontext_t context, void *(*function)(void*)) {
 
 
 pnode *createPnode(my_pthread_t tid) {
-	pnode *ret = malloc(sizeof(pnode));
+	pnode *ret = myallocate(sizeof(pnode), __FILE__, __LINE__, LIBRARY);
 	ret->tid = tid;
 	ret->next = NULL;
 	return ret;
