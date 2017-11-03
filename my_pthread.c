@@ -142,7 +142,7 @@ int my_pthread_create(my_pthread_t *thread, pthread_attr_t * attr, void *(*funct
 		//take the ID
 		tid = ptr->tid;
 		//free the pnode for the recycled ID
-		free(ptr, __FILE__,__LINE__, LIBRARY);
+		mydeallocate(ptr, __FILE__,__LINE__, LIBRARY);
 		//make a new TCB from the gathered information
 		tcb *newTcb = createTcb(tid, context, function);
 		//change the tcb instance in tcbList[id] to this tcb
@@ -354,7 +354,7 @@ int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) {
 	mutex->waitQueue = mutex->waitQueue->next;
 	//make this thread ready so it can now acquire this lock
 	tcbList[(uint) ptr->tid]->status = THREAD_READY;
-	free(ptr, __FILE__, __LINE__, LIBRARY);
+	mydeallocate(ptr, __FILE__, __LINE__, LIBRARY);
 //	printf("finished my_pthread_mutex_unlock()!\n");
 	return 0;
 }
@@ -410,16 +410,16 @@ int maintenanceHelper() {
 		// if a runQueue thread's status is THREAD_DONE:
 		if(currTcb->status == THREAD_DONE) {
 			// deallocate the current thread's stack
-			free(currTcb->stack, __FILE__, __LINE__, LIBRARY);
+			mydeallocate(currTcb->stack, __FILE__, __LINE__, LIBRARY);
 			// deallocate the thread's tcb through tcbList
-			free(currTcb, __FILE__, __LINE__, LIBRARY);
+			mydeallocate(currTcb, __FILE__, __LINE__, LIBRARY);
 			// set tcbList[tid] to NULL
 			tcbList[(uint)currId] = NULL;
 			// then deallocate its pnode in the run queue while
 			// moving currPnode to the next node.
 			pnode *temp = currPnode;
 			currPnode = currPnode->next;
-			free(temp, __FILE__, __LINE__, LIBRARY);
+			mydeallocate(temp, __FILE__, __LINE__, LIBRARY);
 		}
 		// if a runQueue thread's status is THREAD_INTERRUPTED:
 		else if(currTcb->status == THREAD_INTERRUPTED) {

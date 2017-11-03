@@ -24,6 +24,10 @@ typedef struct Node {
 	unsigned short size; 
 } Metadata;  
 
+/* Boolean 1 if manager thread is active, otherwise 0 as globals
+are initialized to by default*/
+uint manager_active;
+
 static char myBlock[MEM];
 /* End global variable declarations. */
 
@@ -31,13 +35,13 @@ static char myBlock[MEM];
 
 /** SMART MALLOC **/
 void* myMalloc(int bytes, char * file, int line, int threadreq){
-	
-	//ERROR CHECKS
-	if(bytes < 1){
-		fprintf(stderr, "Must request a positive number of bytes to allocate - FILE: %s Line: %d\n", file, line);
+		
+	//checks if memory manager exists, if not, init
+	if (manager_active != 1) {
+		init_memory_manager();
 	}
 
-	//SETS MEMORY TO FREE (FIRST MALLOC)
+	//SETS ENTIRE BLOCK TO FREE (FIRST MALLOC)
 	if(*myBlock == '\0'){
 		Metadata data = {'F', MEM - sizeof(Metadata)};
 		*(Metadata *)myBlock = data;
@@ -103,10 +107,8 @@ void myFree(void * ptr, char * file, int line, int threadreq){
 	
 	if(threadreq){ //LIB called
 		//free memory
-		
 	}else{ //USR called
 		//check page table to see if thread is using page
-		
 	}
 	
 	
