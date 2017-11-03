@@ -4,37 +4,29 @@
 // username of iLab: bjl145
 // iLab Server: man.cs.rutgers.edu
 
-#include <stdio.h>
-#include <stdlib.h>
+
 #include "mymalloc.h"
 #define MEM 8388608 //2^20 x 2^3 = 8 megabytes. 
 #define THREADREQ 0 //User called
 #define LIBRARY 1 //Library called
 
+
 /* Define global variables here. */
-
-/*Metadata Node
-
-A struct that holds metadata for a block of memory.
-These structs will be stored before each individual 
-block of memory in myBlock. 
-*/
-typedef struct Node {
-	char used; //freed or allocated
-	unsigned short size; 
-} Metadata;  
 
 /* Boolean 1 if manager thread is active, otherwise 0 as globals
 are initialized to by default*/
 uint manager_active;
 
+/* The global array containing the memory we are "allocating" */
 static char myBlock[MEM];
+
 /* End global variable declarations. */
+
 
 /* malloc & free function implementations */
 
 /** SMART MALLOC **/
-void* myMalloc(int bytes, char * file, int line, int threadreq){
+void* myallocate(int bytes, char * file, int line, int req){
 		
 	//checks if memory manager exists, if not, init
 	if (manager_active != 1) {
@@ -47,7 +39,7 @@ void* myMalloc(int bytes, char * file, int line, int threadreq){
 		*(Metadata *)myBlock = data;
 	}
 	
-	if(threadreq){ //LIB called 
+	if(req){ //LIB called 
 		//allocate block in sys side of mem 
 	}else{ //USR called
 		//check page table
@@ -92,7 +84,7 @@ void* myMalloc(int bytes, char * file, int line, int threadreq){
 }
 
 /** Smart Free **/
-void myFree(void * ptr, char * file, int line, int threadreq){
+void mydeallocate(void * ptr, char * file, int line, int req){
 
 	//ERROR CONDITIONS
 	if((void*)myBlock > ptr || ptr > (void*)(myBlock+MEM) || ptr == NULL || ((*(Metadata *)(ptr-sizeof(Metadata))).used != 'F' && (*(Metadata *)(ptr-sizeof(Metadata))).used != 'T')){ 
@@ -105,7 +97,7 @@ void myFree(void * ptr, char * file, int line, int threadreq){
 		return;
 	}
 	
-	if(threadreq){ //LIB called
+	if(req){ //LIB called
 		//free memory
 	}else{ //USR called
 		//check page table to see if thread is using page

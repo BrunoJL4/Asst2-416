@@ -29,6 +29,10 @@
 
 typedef uint my_pthread_t;
 
+/* Make the global current_thread variable accessible to anyone
+including the header file. */
+extern my_pthread_t current_thread;
+
 /* Our own enums describing thread status. */
 enum threadStatus {
 	THREAD_RUNNING = 0,
