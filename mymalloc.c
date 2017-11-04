@@ -47,16 +47,17 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// say kernel is not free, amount of freed space will be: 
 
 		//Kernel memory space is defined by this metadata
-		Metadata data = {"BLOCK_USED", ((sizeof(Metadata) + (2 * MAX_NUM_THREAD * size(pnode)) + (MAX_NUM_THREAD * sizeof(tcb)) + (sizeof(pnode *) + sizeof(tcbList *)) + (MAX_NUM_THREAD * MEM) + (MAX_NUM_THREAD * sizeof(int *)))};
+		int kernalSize = (sizeof(Metadata) + (2 * MAX_NUM_THREAD * size(pnode)) + (MAX_NUM_THREAD * sizeof(tcb)) + (sizeof(pnode *) + sizeof(tcbList *)) + (MAX_NUM_THREAD * MEM) + (MAX_NUM_THREAD * sizeof(int *)));
+		Metadata data = {"BLOCK_USED", kernalSize};
 		//Throw this meta data to the front of our memory block
 		*(Metadata *)myBlock = data;
 		
 		//Find out the remainder of mem space after adding pages
 		//This is the remaining mem modulo size of the page
 		//Remaining mem is MEM - kernel space + metadata
-		int remainingMem = myBlock->size + sizeof(Metadata);
-		int extraMem = remainingMem % PAGESIZE;
-		myBlock->size += remainingMem;
+		int remainingMem = (MEM - kernalSize) % (sizeof(Metadata) * PAGESIZE);
+		
+		
 		
 		//Create metadata for each page
 		//Continue jumping by pagesize
@@ -68,6 +69,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		}
 		
 		//End of initial page and kernel setup
+	*/
+	
+	
 	}
 	
 	//if calling user thread does not have a page
