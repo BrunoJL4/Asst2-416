@@ -9,6 +9,7 @@
 #define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes. 
 #define THREADREQ 0 //User called
 #define LIBRARY 1 //Library called
+#define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
 
 
 /* Define global variables here. */
@@ -42,12 +43,31 @@ void* myallocate(int bytes, char * file, int line, int req){
 		   comes from the my_pthread_t.h file.
 		   5. Space  for the Page Table.  It's just space for
 		   pointers  to a page, which will be used to access a 
-		   page metadata block. So MAX_NUM_THREADS*size of a pointer.*/ 
-		// say kernel is not free, amount of freed space will be:  
-		Metadata data = {'F', MEM - (MAX_NUM_THREAD * size(pnode))};
+		   page metadata block. So MAX_NUM_THREADS*size of a pointer.*/
+		// say kernel is not free, amount of freed space will be: 
+
+		//Kernel memory space is defined by this metadata
+		Metadata data = {"BLOCK_USED", ((sizeof(Metadata) + (2 * MAX_NUM_THREAD * size(pnode)) + (MAX_NUM_THREAD * sizeof(tcb)) + (sizeof(pnode *) + sizeof(tcbList *)) + (MAX_NUM_THREAD * MEM) + (MAX_NUM_THREAD * sizeof(int *)))};
+		//Throw this meta data to the front of our memory block
 		*(Metadata *)myBlock = data;
 		
-		//have page boundries understood
+		//Find out the remainder of mem space after adding pages
+		//This is the remaining mem modulo size of the page
+		//Remaining mem is MEM - kernel space + metadata
+		int remainingMem = myBlock->size + sizeof(Metadata);
+		int extraMem = remainingMem % PAGESIZE;
+		myBlock->size += remainingMem;
+		
+		//Create metadata for each page
+		//Continue jumping by pagesize
+		char * ptr = &myBlock + myBlock->size();
+		while (ptr < &myBlock + TOTALMEM) {
+			data = {"BLOCK_FREE", PAGESIZE };
+			*(Metadata *)ptr = data;
+			ptr += ptr->size;
+		}
+		
+		//End of initial page and kernel setup
 	}
 	
 	//if calling user thread does not have a page
