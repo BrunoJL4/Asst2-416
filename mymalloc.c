@@ -6,7 +6,7 @@
 
 
 #include "mymalloc.h"
-#define MEM 8388608 //2^20 x 2^3 = 8 megabytes. 
+#define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes. 
 #define THREADREQ 0 //User called
 #define LIBRARY 1 //Library called
 
@@ -18,26 +18,49 @@ are initialized to by default*/
 uint manager_active;
 
 /* The global array containing the memory we are "allocating" */
-static char myBlock[MEM];
+static char myBlock[TOTALMEM];
 
 /* End global variable declarations. */
-
 
 /* malloc & free function implementations */
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
 		
-	//checks if memory manager exists, if not, init
-	if (manager_active != 1) {
-		init_memory_manager();
-	}
-
-	//SETS ENTIRE BLOCK TO FREE (FIRST MALLOC)
+	//(FIRST MALLOC) initialize kernel
 	if(*myBlock == '\0'){
-		Metadata data = {'F', MEM - sizeof(Metadata)};
+		
+		/* init kernal space - kernal space is:
+		   1. Enough space for pnodes we allocate plus buffer.
+		   This would be about 2 * MAX_NUM_THREADS * sizeof(pnode)
+		   2. Enough space for all of the TCB's. This  would be
+		   MAX_NUM_THREADS*sizeof(tcb).
+		   3. Space for MLPQ and tcbList. This is the size of a
+		   pointer, times 2.
+		   4. Space for all of the stacks we allocate. This will
+		   be, in the worst case, MAX_NUM_THREADS * MEM. MEM
+		   comes from the my_pthread_t.h file.
+		   5. Space  for the Page Table.  It's just space for
+		   pointers  to a page, which will be used to access a 
+		   page metadata block. So MAX_NUM_THREADS*size of a pointer.*/ 
+		// say kernel is not free, amount of freed space will be:  
+		Metadata data = {'F', MEM - (MAX_NUM_THREAD * size(pnode))};
 		*(Metadata *)myBlock = data;
+		
+		//have page boundries understood
 	}
+	
+	//if calling user thread does not have a page
+		//assign a page
+	//else retrieve the page associated with thread
+	
+	//start at initial page meta data
+	//continue to jump from different meta data to the next
+		//if block is free
+			//combine with any adjacent free blocks
+			//If block is big enough
+				//divide into requested size and return
+			//else continue
 	
 	if(req){ //LIB called 
 		//allocate block in sys side of mem 
