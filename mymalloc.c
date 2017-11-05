@@ -55,9 +55,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 		//Find out the remainder of mem space after adding pages
 		//This is the remaining mem modulo size of the page
 		//Remaining mem is MEM - kernel space + metadata
-		int remainingMem = (MEM - kernalSize) % (sizeof(Metadata) * PAGESIZE);
-		
-		
+		int remainingMem = (MEM - kernalSize) % (PAGESIZE);
+		myBlock->size += remainingMem;
 		
 		//Create metadata for each page
 		//Continue jumping by pagesize
@@ -68,10 +67,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			ptr += ptr->size;
 		}
 		
-		//End of initial page and kernel setup
-	*/
-	
-	
+		//End of initial page and kernel setup	
 	}
 	
 	//if calling user thread does not have a page

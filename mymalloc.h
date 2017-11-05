@@ -33,19 +33,30 @@ enum blockStatus {
 
 /*Metadata Node
 
-A struct that holds metadata for a block of memory.
+A struct that holds metadata for a block of page memory.
 These structs will be stored before each individual 
 block of memory in myBlock. 
 
 */
-typedef struct Node {
+typedef struct PageNode {
 	/* The status of the current node. 0 for free/'F', 1 for allocated/'T' (used). 
 	We will, in the library, refer to these as BLOCK_FREE and BLOCK_USED*/
 	int used;
 	/* The size of the current node in bytes.
 	TODO @all: discuss how to use this for the paging project. */
 	unsigned short size; 
+	
+	//Pointer to the next
+	char * next;
 } Metadata;  
+
+/*
+	Like the struct above except efficiently specific for segment metadata
+*/
+typedef struct SegNode {
+	int used;
+	unsigned short size;
+} SegMetadata;
 
 /* Function Declarations: */
 
