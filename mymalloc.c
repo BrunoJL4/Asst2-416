@@ -30,15 +30,15 @@ void* myallocate(int bytes, char * file, int line, int req){
 	if(*myBlock == '\0'){
 		//CREATE KERNEL ABSTRACTION (w/ METADATA)
 		int kernelSize = sizeof(Metadata) 
-						 + (2 * MAX_NUM_THREADS * size(pnode)) //pnodes allocation + buffer
+						 + (2 * MAX_NUM_THREADS * sizeof(pnode)) //pnodes allocation + buffer
 						 + (MAX_NUM_THREADS * sizeof(tcb)) //tcb allocation
-						 + (sizeof(pnode *) + sizeof(tcbList *)) //MLPQ & tcbList
+						 + (sizeof(pnode *) + sizeof(tcb **)) //MLPQ & tcbList
 						 + (MAX_NUM_THREADS * MEM) //stack allocations
 						 + ((MAX_NUM_THREADS + 1) * sizeof(char *)); //page table 
 		int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE);
 		kernelSize += remainingMem; //remainingMem goes to kernel
 		
-		Metadata data = { BLOCK_USED, kernelSize}; 
+		Metadata data = (Metadata) { BLOCK_USED, kernelSize }; 
 		*(Metadata *)myBlock = data; //block is placed in front of memory
 		
 		pageTable = (char **)((myBlock + kernelSize) - ((MAX_NUM_THREADS + 1) * sizeof(char *))); //pt pointer
@@ -47,7 +47,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		//CREATE PAGE ABSTRACTION (w/ METADATA)
 		char * ptr = myBlock + ((Metadata *)myBlock)->size;
 		while (ptr < (myBlock + TOTALMEM)) {
-			data = { BLOCK_FREE, PAGESIZE };
+			Metadata data = { BLOCK_FREE, PAGESIZE };
 			*(Metadata *)ptr = data;
 			ptr += ((Metadata *)ptr)->size;
 		}
@@ -69,6 +69,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 	if (pageTable[current_thread] == NULL) {
 		return NULL; //phaseA
 	}	
+	// bullshit var here to test compiler warnings
+	int bahbah;
 
 	//LOOK FOR FREED SEGMENT WITHIN THREADS GIVEN PAGE & COMBINE APPLICABLE SEGMENTS
 	char * ptr = pageTable[current_thread] + sizeof(Metadata);
@@ -81,7 +83,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 					}
 			}	
 			if (((SegMetadata *)ptr)->size <= bytes) { //Can free segment hold requested bytes?
-				SegMetadata segment = { BLOCK_USED, bytes };
 				//IF ENTIRE SEGMENT WAS NOT NEEDED, SET REST TO FREE (REQUIRES A SEGMETADATA)
 				if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
 					char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
