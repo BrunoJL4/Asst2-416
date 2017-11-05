@@ -13,10 +13,14 @@ plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
 
 
-/* Override malloc() and free() calls with our functions */
+/* Constants used in mymalloc.c will be declared here, so that
+they can be accessed by other libraries. */
 #define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
 #define free(x) mydeallocate(x, __FILE__, __LINE__, THREADREQ)
-
+#define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes. 
+#define THREADREQ 0 //User called
+#define LIBRARY 1 //Library called
+#define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
 
 /* Enum declarations: */
 enum blockStatus {
