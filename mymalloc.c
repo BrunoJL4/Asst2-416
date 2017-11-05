@@ -22,7 +22,7 @@ uint manager_active;
 static char myBlock[TOTALMEM];
 
 /* This is the page table */
-char * pageTable[MAX_NUM_THREADS + 2]; //+2 so that our pthread library "manager" index is not out-of-bounds
+char * pageTable; 
 
 /* End global variable declarations. */
 
@@ -31,192 +31,102 @@ char * pageTable[MAX_NUM_THREADS + 2]; //+2 so that our pthread library "manager
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
 		
-	//(FIRST MALLOC) initialize kernel
+	//INITIALIZE KERNAL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
+		//CREATE KERAL ABSTRACTION (w/ METADATA)
+		int kernalSize = sizeof(Metadata) 
+						 + (2 * MAX_NUM_THREADS * size(pnode)) //pnodes allocation + buffer
+						 + (MAX_NUM_THREADS * sizeof(tcb)) //tcb allocation
+						 + (sizeof(pnode *) + sizeof(tcbList *)) //MLPQ & tcbList
+						 + (MAX_NUM_THREADS * MEM) //stack allocations
+						 + ((MAX_NUM_THREADS + 1) * sizeof(char *))}; //page table 
+		int remainingMem = (MEM - kernalSize ) % (PAGESIZE);
+		kernalSize += remainingMem; //remainingMem goes to kernal
 		
-		/* init kernal space - kernal space is:
-		   1. Enough space for pnodes we allocate plus buffer.
-		   This would be about 2 * MAX_NUM_THREADS * sizeof(pnode)
-		   2. Enough space for all of the TCB's. This  would be
-		   MAX_NUM_THREADS*sizeof(tcb) size of a
-		   pointer, times 2.
-		   4. Space for all of the stacks we allocate. This will
-		   be, in the worst case, MAX_NUM_THREADS * MEM. MEM
-		   comes from the my_pthread_t.h file.
-		   5. Space  for the Page Table.  It's just space for
-		   pointers  to a page, which will be used to access a 
-		   page metadata block. So MAX_NUM_THREADS*size of a pointer.*/
-		// say kernel is not free, amount of freed space will be: 
-
-		//Kernel memory space is defined by this metadata
-		int kernalSize = (sizeof(Metadata) + (2 * MAX_NUM_THREADS * size(pnode)) + (MAX_NUM_THREADS * sizeof(tcb)) + (sizeof(pnode *) + sizeof(tcbList *)) + (MAX_NUM_THREADS * MEM) + (MAX_NUM_THREADS * sizeof(int *)));
-		Metadata data = { BLOCK_USED, kernalSize};
-		//Throw this meta data to the front of our memory block
-		*(Metadata *)myBlock = data;
+		Metadata kernal = { BLOCK_USED, kernalSize}; 
+		*(Metadata *)myBlock = kernal; //block is placed in front of memory
 		
-		//Find out the remainder of mem space after adding pages
-		//This is the remaining mem modulo size of the page
-		//Remaining mem is MEM - kernel space + metadata
-		int remainingMem = (MEM - kernalSize) % (PAGESIZE);
-		(Metadata *)myBlock->size += remainingMem;
-		pageTable[MAX_NUM_THREADS + 1] = &myBlock;
+		pageTable = (myBlock + kernalSize) - ((MAX_NUM_THREADS + 1) * sizeof(char *)); //pt pointer
+		pageTable[MAX_NUM_THREADS + 1] = myBlock; //MAX_NUM_THREADS + 1 is pages owned by scheduler
 		
-		//Create metadata for each page
-		//Continue jumping by pagesize
-		char * ptr = &myBlock + myBlock->size();
+		//CREATE PAGE ABSTRACTION (w/ METADATA)
+		ptr = myBlock + myBlock->size + ;
 		while (ptr < &myBlock + TOTALMEM) {
 			data = { BLOCK_FREE, PAGESIZE };
 			*(Metadata *)ptr = data;
 			ptr += (Metadata *)ptr->size;
 		}
-		
-		//End of initial page and kernel setup	
-	}
+	} //End of kernel setup and page creating	
 	
-	//Check if the calling thread has a page
-	//If so, search for available space
-	if (pageTable[current_thread] != NULL) {
-		//This thread has a page, look for segment
-		char * ptr = pageTable[current_thread] + sizeof(Metadata);
-		while (ptr < pageTable[current_thread] + PAGESIZE) {
-			//If the segment is free, check if the next is also free, then check if it is enough space
-			if ((SegMetadata *)ptr->used == BLOCK_FREE) {
-				//If nextPtr is still in bounds, check if it is free
-				if (ptr + (SegMetadata *)ptr->size < pageTable[current_thread] + PAGESIZE) {
-					char * nextPtr = ptr + (SegMetadata *)ptr->size;
-					//If nextPtr is free, combine with ptr
-					if ((SegMetadata *)nextPtr->used == BLOCK_FREE) {
-						(SegMetadata *)ptr->size += (SegMetadata *)nextPtr->size + sizeof(SegMetadata); //Treat metadata for segments as if being outside the segment
-						//@all (mostly @Bruno): wipe the metadata of nextPtr
-					}
-				}
-				//If this segment has enough space, assign user requested space, set remaining to free, and return
-				if ((SegMetadata *)ptr->size <= bytes) {
-					SegMetadata segment = { BLOCK_USED, bytes };
-					//If all bytes were not used, create another free segment (+/-sizeof(SegMetadata) considering leakage)
-					if ((SegMetadata *)ptr->size < (bytes + sizeof(SegMetadata))) {
-						char * nextPtr = ptr + sizeof(SegMetadata) + (SegMetadata *)ptr->size;
-						SegMetadata nextSegment = { BLOCK_FREE, (SegMetadata *)ptr->size - (bytes + sizeof(SegMetadata)) };
-						*(SegMetadata *)nextPtr = nextSegment;
-						(SegMetadata *)ptr->size -= sizeof(SegMetadata) + (SegMetadata *)nextPtr;
-					}
-					return ptr + sizeof(SegMetadata);
-				}
-			}
-			ptr += (SegMetadata *)ptr->size;
-		}
-		//If we reached this point, no segments available, return NULL (Phase A)
-		return NULL;
-		
-	} else { //Assign a page, return NULL if none available (Phase A)
-		char * ptr = &myBlock + myBlock->size();
-		while (ptr < &myBlock + TOTALMEM) {
-			//If this page is not being used, claim it
-			if ((Metadata *)ptr->used == BLOCK_FREE) {
+	//IF THREAD DOES NOT HAVE A PAGE, ASSIGN ONE IF AVAILABLE
+	if (pageTable[current_thread] == NULL) {
+		char * ptr = myBlock + myBlock->size; //Iterate through kernal
+		while (ptr < myBlock + TOTALMEM) {
+			if ((Metadata *)ptr->used == BLOCK_FREE) { //If this page is free, claim it
 				pageTable[current_thread] = ptr;
 				break;
 			}
 			ptr += PAGESIZE;
 		}
-		//If no page was found, return NULL (Phase A)
-		if (pageTable[current_thread] == NULL) {
-			return NULL;
-		}
-		
-		//We have assigned a page, give memory segment
-		SegMetadata segment = { BLOCK_USED, bytes }
-		ptr = pageTable[current_thread] + sizeof(Metadata);
-		*(SegMetadata *)ptr = segment;
-		//Set remaining page to free segment
-		char * nextPtr = ptr + (SegMetadata *)ptr->size + sizeof(SegMetadata);
-		int remainingPageSpace = PAGESIZE - ((nextPtr - 1) - pageTable[current_thread]);
-		segment = { BLOCK_FREE, remainingPageSpace };
-		*(SegMetadata *)nextPtr = segment;
-		
-		//Return pointer to user requested segment
-		return ptr + sizeof(SegMetadata);
 	}
 	
-	
-	/* THIS IS IMPLEMENTATION FROM CS214
-	//ITERATE MEMORY TO FIND FREE BLOCK IN PAGE
-	char * ptr = NULL;
-	for(ptr = myBlock; ptr - myBlock <= sizeof(myBlock); ptr = ptr + sizeof(Metadata) + (*(Metadata *)ptr).size){
-		if((*(Metadata *)ptr).used == 'F' && bytes <= (*(Metadata *)ptr).size){
-			
-			int blockSize = (*(Metadata *)ptr).size;			
+	//DID MEM MANAGER FIND A FREE PAGE?
+	if (pageTable[current_thread] == NULL) {
+		return NULL; //phaseA
+	}	
 
-
-			if(blockSize - bytes <= 4){
-				(*(Metadata *)ptr).used = 'T';
-				return (void*)(ptr + sizeof(Metadata));
-			} 
-	
-			//UPDATE METADATA
-			(*(Metadata *)ptr).used = 'T';	
-			(*(Metadata *)ptr).size = bytes;
-
-			ptr = ptr + sizeof(Metadata) + bytes
-
-			//ADD NEW METADATA
-			Metadata data = {'F', blockSize - bytes - sizeof(Metadata)};
-			*(Metadata *)ptr = data;
-						
-			return (void *)(ptr - bytes);	
+	//LOOK FOR FREED SEGMENT WITHIN THREADS GIVEN PAGE & COMBINE APPLICABLE SEGMENTS
+	char * ptr = pageTable[current_thread] + sizeof(Metadata);
+	while (ptr < pageTable[current_thread] + PAGESIZE) {		
+		if ((SegMetadata *)ptr->used == BLOCK_FREE) { //Is current segment free?
+			if (ptr + (SegMetadata *)ptr->size + sizeof(SegMetadata) < pageTable[current_thread] + PAGESIZE) { //Is next segment free? (within bounds)
+				char * nextPtr = ptr + (SegMetadata *)ptr->size + sizeof(SegMetadata);
+					if ((SegMetadata *)nextPtr->used == BLOCK_FREE) {		
+						(SegMetadata *)ptr->size += (SegMetadata *)nextPtr->size + sizeof(SegMetadata); //Combine ptr & nextPtr segments
+					}
+			}	
+			if ((SegMetadata *)ptr->size <= bytes) { //Can free segment hold requested bytes?
+				SegMetadata segment = { BLOCK_USED, bytes };
+				//IF ENTIRE SEGMENT WAS NOT NEEDED, SET REST TO FREE (REQUIRES A SEGMETADATA)
+				if ((SegMetadata *)ptr->size > (bytes + sizeof(SegMetadata))) {
+					char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
+					SegMetadata nextSegment = { BLOCK_FREE, (SegMetadata *)ptr->size - (bytes + sizeof(SegMetadata)) };
+					*(SegMetadata *)nextPtr = nextSegment;
+					(SegMetadata *)ptr->size -= (sizeof(SegMetadata) + (SegMetadata *)nextPtr->size);
+				}
+				
+				return ptr + sizeof(SegMetadata); //If there are no available bytes to do so, give extra to user.
+			}
 		}
+		ptr += (SegMetadata *)ptr->size + sizeof(SegMetadata); //segment is not free, iterate to next segment
 	}
-	*/
 	
-	
-	fprintf(stderr, "Not enough memory to allocate requested bytes. - File: %s, Line: %d.\n", file, line);
-	return NULL; //NO MEMORY TO ALLOCATE REQUESTED BYTES
-	
+	//NO SEGMENTS AVAILABLE
+	return NULL; //phase A
 }
 
 /** Smart Free **/
 void mydeallocate(void * ptr, char * file, int line, int req){
 
 	//ERROR CONDITIONS
-	if((void*)myBlock > ptr || ptr > (void*)(myBlock+MEM) || ptr == NULL || ((*(Metadata *)(ptr-sizeof(Metadata))).used != 'F' && (*(Metadata *)(ptr-sizeof(Metadata))).used != 'T')){ 
+	if((void*)myBlock > ptr || ptr > (void*)(myBlock+MEM) || ptr == NULL || ((*(Metadata *)(ptr-sizeof(Metadata))).used == BLOCK_FREE && (*(Metadata *)(ptr-sizeof(Metadata))).used != BLOCK_USED)){ 
 		fprintf(stderr, "Pointer not dynamically located! - File: %s, Line: %d.\n", file, line);
 		return;
 	}
-
-	if((*(Metadata *)(ptr - sizeof(Metadata))).used == 'F'){
+	
+	if((*(Metadata *)(ptr - sizeof(Metadata))).used == BLOCK_FREE){
 		fprintf(stderr, "Pointer already freed! - File: %s, Line: %d.\n", file, line);
 		return;
 	}
 	
-	if(req){ //LIB called
-		//free memory
-	}else{ //USR called
-		//check page table to see if thread is using page
-	}
+	//does thread freeing segment own the page?
 	
 	
-
-	/* THIS IS IMPLEMENTATION FROM CS214
+	
 	//SET FREE FLAG
-	(*(Metadata *)(ptr - sizeof(Metadata))).used = 'F';		
-
-	//IS NEXT BLOCK FREE?
-	char * nextBlock = (ptr + (*(Metadata *)(ptr-sizeof(Metadata))).size);
-	if(nextBlock < myBlock+MEM){
-		if((*(Metadata *)nextBlock).used == 'F'){
-			//COMBINE BLOCKS
-			(*(Metadata *)(ptr - sizeof(Metadata))).size = (*(Metadata *)(ptr - sizeof(Metadata))).size + sizeof(Metadata) + (*(Metadata *)nextBlock).size;  
-		}
-	}
-	//IS PREVIOUS BLOCK FREE?
-	char * prevBlock = NULL;    
-	for(prevBlock = myBlock; prevBlock - myBlock <= sizeof(myBlock); prevBlock = prevBlock + sizeof(Metadata) + (*(Metadata *)prevBlock).size){	
-		if(prevBlock + (sizeof(Metadata)*2) + (*(Metadata *)prevBlock).size == ptr && (*(Metadata *)prevBlock).used == 'F'){
-			//COMBINE BLOCKS
-		 	(*(Metadata *)prevBlock).size = (*(Metadata *)prevBlock).size + sizeof(Metadata) + (*(Metadata * )(ptr - sizeof(Metadata))).size;
-		}
-	}
+	(Metadata *)(ptr - sizeof(SegMetadata))->used = BLOCK_FREE;
 	
-	*/
+	
 	return;
 
 }
