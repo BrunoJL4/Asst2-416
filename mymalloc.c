@@ -95,7 +95,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 					(SegMetadata *)ptr->size -= (sizeof(SegMetadata) + (SegMetadata *)nextPtr->size);
 				}
 				
-				return ptr + sizeof(SegMetadata); //If there are no available bytes to do so, give extra to user.
+				return (void *)(ptr + sizeof(SegMetadata)); //If there are no available bytes to do so, give extra to user.
 			}
 		}
 		ptr += (SegMetadata *)ptr->size + sizeof(SegMetadata); //segment is not free, iterate to next segment
@@ -119,13 +119,12 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		return;
 	}
 	
-	//does thread freeing segment own the page?
-	
-	
-	
-	//SET FREE FLAG
-	(Metadata *)(ptr - sizeof(SegMetadata))->used = BLOCK_FREE;
-	
+	//IS REQUESTED SEGMENT TO BE FREE WITHIN START AND END OF ASSIGNED PAGE?
+	if(pageTable[current_thread] < ptr && (pageTable[currentThread] + PAGESIZE) > ptr)
+		(Metadata *)(ptr - sizeof(SegMetadata))->used = BLOCK_FREE; //set flag
+	else
+		fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
+		
 	
 	return;
 
