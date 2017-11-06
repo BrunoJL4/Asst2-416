@@ -48,7 +48,7 @@ typedef struct PageNode {
 	int used;
 	/* The size of the current node in bytes.
 	TODO @all: discuss how to use this for the paging project. */
-	unsigned short size; 
+	int size; 
 	
 	//Pointer to the next
 	char * next;

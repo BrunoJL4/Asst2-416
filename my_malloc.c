@@ -6,7 +6,6 @@
 
 
 #include "my_malloc.h"
-
 /* Define global variables here. */
 
 /* Boolean 1 if manager thread is active, otherwise 0 as globals
@@ -25,6 +24,7 @@ char ** pageTable;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
+	
 	int thread;
 	if(req == THREADREQ) {
 		thread = current_thread;
@@ -36,7 +36,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		printf("Error! Invalid value for req: %d\n", req);
 		return NULL;
 	}
-	printf("Beginning myallocate(), thread is: %d\n", thread);
+	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
 	//INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
@@ -62,6 +62,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			Metadata data = { BLOCK_FREE, PAGESIZE };
 			*(Metadata *)ptr = data;
 			SegMetadata segment = {BLOCK_FREE, PAGESIZE - sizeof(SegMetadata) - sizeof(Metadata) };
+			*(SegMetadata *)(ptr + sizeof(Metadata)) = segment;
 			ptr += ((Metadata *)ptr)->size;
 		}
 	} //End of kernel setup and page creating	
@@ -72,7 +73,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		char * ptr = myBlock + ((Metadata *)myBlock)->size; //Iterate through kernal
 		while (ptr < myBlock + TOTALMEM) {
 			if (((Metadata *)ptr)->used == BLOCK_FREE) { //If this page is free, claim it
-				((Metadata *)ptr)->used == BLOCK_USED;
+				((Metadata *)ptr)->used = BLOCK_USED;
 				pageTable[thread] = ptr;
 				break;
 			}
@@ -91,6 +92,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	while (ptr < pageTable[thread] + PAGESIZE) {		
 		printf("Checking for combinable segments in page for thread: %d\n", thread);
 		if (((SegMetadata *)ptr)->used == BLOCK_FREE) { //Is current segment free?
+		
 			if (ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata) < pageTable[thread] + PAGESIZE) { //Is there a next segment within bounds
 				char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 					if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {		
@@ -98,7 +100,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 						((SegMetadata *)ptr)->size += ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata); //Combine ptr & nextPtr segments
 					}
 			}	
-			if (((SegMetadata *)ptr)->size <= bytes) { //Can free segment hold requested bytes?
+			if (((SegMetadata *)ptr)->size >= bytes) { //Can free segment hold requested bytes?
 				((SegMetadata *)ptr)->used = BLOCK_USED;
 				printf("Allocated thread: %d's requested space.\n", current_thread);
 				//IF ENTIRE SEGMENT WAS NOT NEEDED, SET REST TO FREE (REQUIRES A SEGMETADATA)
@@ -135,7 +137,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		printf("Error! Invalid value for req: %d\n", req);
 		return;
 	}
-	printf("Beginning mydeallocate for thread: %d\n", thread);
+	printf("Beginning mydeallocate for thread: %d\n", current_thread);
 	if((void *)myBlock > ptr || ptr > (void*)(myBlock + TOTALMEM) || ptr == NULL || ((*(Metadata *)(ptr-sizeof(Metadata))).used == BLOCK_FREE && (*(Metadata *)(ptr-sizeof(Metadata))).used != BLOCK_USED)){ 
 		fprintf(stderr, "Pointer not dynamically located! - File: %s, Line: %d.\n", file, line);
 		return;
