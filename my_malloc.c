@@ -36,7 +36,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		printf("Error! Invalid value for req: %d\n", req);
 		return NULL;
 	}
-	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
+	printf("Beginning myallocate(), thread is: %d\n", thread);
 	//INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
@@ -130,7 +130,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		printf("Error! Invalid value for req: %d\n", req);
 		return;
 	}
-	printf("Beginning mydeallocate for thread: %d\n", current_thread);
+	printf("Beginning mydeallocate for thread: %d\n", thread);
 	if((void *)myBlock > ptr || ptr > (void*)(myBlock + TOTALMEM) || ptr == NULL || ((*(Metadata *)(ptr-sizeof(Metadata))).used == BLOCK_FREE && (*(Metadata *)(ptr-sizeof(Metadata))).used != BLOCK_USED)){ 
 		fprintf(stderr, "Pointer not dynamically located! - File: %s, Line: %d.\n", file, line);
 		return;
