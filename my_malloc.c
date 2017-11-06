@@ -24,7 +24,7 @@ char ** pageTable;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
-	
+	// "thread" var represents the calling thread's ID
 	int thread;
 	if(req == THREADREQ) {
 		thread = current_thread;
@@ -37,32 +37,44 @@ void* myallocate(int bytes, char * file, int line, int req){
 		return NULL;
 	}
 	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
-	//INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
+	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
-		//CREATE KERNEL ABSTRACTION (w/ METADATA)
+		// establish the base size of the kernel's space in memory
 		int kernelSize = sizeof(Metadata) 
-						 + (2 * MAX_NUM_THREADS * sizeof(pnode)) //pnodes allocation + buffer
-						 + (MAX_NUM_THREADS * sizeof(tcb)) //tcb allocation
-						 + (sizeof(pnode *) + sizeof(tcb **)) //MLPQ & tcbList
-						 + (MAX_NUM_THREADS * MEM) //stack allocations
+						 + (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
+						 + (MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
+						 + (sizeof(pnode *) + sizeof(tcb **)) // MLPQ & tcbList
+						 + (MAX_NUM_THREADS * MEM) // stack allocations for child threads
 						 + ((MAX_NUM_THREADS + 1) * sizeof(char *)); //page table 
-		int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE);
-		kernelSize += remainingMem; //remainingMem goes to kernel
-		
+		// the memory that would be "left over" after dividing the global block into pages,
+		// is lumped into the kernel's space
+		int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE); 
+		kernelSize += remainingMem;
+		// create Metadata for kernel's block... mark it as BLOCK_USED with kernelSize as size
 		Metadata data = (Metadata) { BLOCK_USED, kernelSize }; 
-		*(Metadata *)myBlock = data; //block is placed in front of memory
-		
-		pageTable = (char **)((myBlock + kernelSize) - ((MAX_NUM_THREADS + 1) * sizeof(char *))); //pt pointer
-		pageTable[MAX_NUM_THREADS + 1] = myBlock; //MAX_NUM_THREADS + 1 is pages owned by scheduler
-		
-		//CREATE PAGE ABSTRACTION (w/ METADATA)
+		// Metadata for kernel is at the beginning of the global block, and will be followed
+		// by freely-usable space for kernel allocations
+		*(Metadata *)myBlock = data;
+		// pageTable is put in the "last" space in the kernel block... each cell stores a pointer, so
+		// pageTable is set to a casted pointer-array at this space in memory.
+		pageTable = (char **)((myBlock + kernelSize) - ((MAX_NUM_THREADS + 1) * sizeof(char *)));
+		// MAX_NUM_THREADS + 1 is pages owned by scheduler/kernel, which means that its entry in
+		// pageTable should point to the Metadata for the kernel... which is at the beginning of myBlock.
+		pageTable[MAX_NUM_THREADS + 1] = myBlock;
+		// Go through myBlock and create Metadata structs at the beginning of each page, essentially
+		// "initializing" myBlock for allocations.
 		char * ptr = myBlock + ((Metadata *)myBlock)->size;
 		while (ptr < (myBlock + TOTALMEM)) {
+			// each block is free by default and will always be of size PAGESIZE.
 			Metadata data = { BLOCK_FREE, PAGESIZE };
 			*(Metadata *)ptr = data;
+			// initialize struct for the first segment's metadata, which takes up the remaining
+			// space in the page to start
 			SegMetadata segment = {BLOCK_FREE, PAGESIZE - sizeof(SegMetadata) - sizeof(Metadata) };
+			// copy the struct to the block
 			*(SegMetadata *)(ptr + sizeof(Metadata)) = segment;
+			// go to the next page
 			ptr += ((Metadata *)ptr)->size;
 		}
 	} //End of kernel setup and page creating	
@@ -70,13 +82,16 @@ void* myallocate(int bytes, char * file, int line, int req){
 	//IF THREAD DOES NOT HAVE A PAGE, ASSIGN ONE IF AVAILABLE
 	if (pageTable[thread] == NULL) {
 		printf("Assigning page for thread %d\n", thread);
-		char * ptr = myBlock + ((Metadata *)myBlock)->size; //Iterate through kernal
+		// Go through myBlock and find the first free page
+		char * ptr = myBlock + ((Metadata *)myBlock)->size;
 		while (ptr < myBlock + TOTALMEM) {
-			if (((Metadata *)ptr)->used == BLOCK_FREE) { //If this page is free, claim it
+			// Claim the first free/available page
+			if (((Metadata *)ptr)->used == BLOCK_FREE) {
 				((Metadata *)ptr)->used = BLOCK_USED;
 				pageTable[thread] = ptr;
 				break;
 			}
+			// Try the next page
 			ptr += PAGESIZE;
 		}
 	}
@@ -87,23 +102,29 @@ void* myallocate(int bytes, char * file, int line, int req){
 		return NULL; //phaseA
 	}	
 
-	//LOOK FOR FREED SEGMENT WITHIN THREADS GIVEN PAGE & COMBINE APPLICABLE SEGMENTS
+	// Combine any consecutive, free segments in the current thread's page.
+	// At the same time, look and see if any free segments can store the user's request.
 	char * ptr = pageTable[thread] + sizeof(Metadata);
 	while (ptr < pageTable[thread] + PAGESIZE) {		
+		// TODO @all: does this logic account for multiple free, consecutive segments?
+		// are we iterating properly through the segments?
 		printf("Checking for combinable segments in page for thread: %d\n", thread);
-		if (((SegMetadata *)ptr)->used == BLOCK_FREE) { //Is current segment free?
-		
-			if (ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata) < pageTable[thread] + PAGESIZE) { //Is there a next segment within bounds
+		// If the current segment is free:
+		if (((SegMetadata *)ptr)->used == BLOCK_FREE) {
+			// If there is a following segment within the page:
+			if (ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata) < pageTable[thread] + PAGESIZE) {
 				char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+					// If that following segment is free, combine the segments.
 					if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {		
 						printf("Combining segments in page for thread: %d\n", thread);
 						((SegMetadata *)ptr)->size += ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata); //Combine ptr & nextPtr segments
 					}
 			}	
-			if (((SegMetadata *)ptr)->size >= bytes) { //Can free segment hold requested bytes?
+			// If the current segment can hold the data, use it.
+			if (((SegMetadata *)ptr)->size >= bytes) {
 				((SegMetadata *)ptr)->used = BLOCK_USED;
 				printf("Allocated thread: %d's requested space.\n", current_thread);
-				//IF ENTIRE SEGMENT WAS NOT NEEDED, SET REST TO FREE (REQUIRES A SEGMETADATA)
+				// If the entire segment wasn't needed, take the remaining space and make another segment from it.
 				if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
 					printf("Entire segment wasn't needed, setting remaining space to free/open for thread: %d\n", thread);
 					char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
@@ -111,14 +132,16 @@ void* myallocate(int bytes, char * file, int line, int req){
 					*(SegMetadata *)nextPtr = nextSegment;
 					((SegMetadata *)ptr)->size -= (sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size);
 				}
-				
-				return (void *)(ptr + sizeof(SegMetadata)); //If there are no available bytes to do so, give extra to user.
+				// If the remaining space can't hold another segment, just give the remaining data to the user.
+				// TODO @all: Is this a valid approach? It could cause segfaults.
+				return (void *)(ptr + sizeof(SegMetadata));
 			}
 		}
-		ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata); //segment is not free, iterate to next segment
+		// segment is not free, iterate to next segment
+		ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 	}
 	
-	//NO SEGMENTS AVAILABLE
+	// NO SEGMENTS AVAILABLE
 	printf("No segments available for thread: %d\n", thread);
 	return NULL; //phase A
 }
