@@ -5,7 +5,7 @@
 // iLab Server: man.cs.rutgers.edu
 
 
-#include "mymalloc.h"
+#include "my_malloc.h"
 
 /* Define global variables here. */
 
@@ -52,7 +52,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 			ptr += ((Metadata *)ptr)->size;
 		}
 	} //End of kernel setup and page creating	
-	
 	//IF THREAD DOES NOT HAVE A PAGE, ASSIGN ONE IF AVAILABLE
 	if (pageTable[current_thread] == NULL) {
 		char * ptr = myBlock + ((Metadata *)myBlock)->size; //Iterate through kernal
@@ -69,8 +68,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 	if (pageTable[current_thread] == NULL) {
 		return NULL; //phaseA
 	}	
-	// bullshit var here to test compiler warnings
-	int bahbah;
 
 	//LOOK FOR FREED SEGMENT WITHIN THREADS GIVEN PAGE & COMBINE APPLICABLE SEGMENTS
 	char * ptr = pageTable[current_thread] + sizeof(Metadata);

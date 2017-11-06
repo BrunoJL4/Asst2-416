@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
-#include "mymalloc.h"
+#include "my_malloc.h"
 
 typedef uint my_pthread_t;
 
@@ -216,6 +216,9 @@ tcb *createTcb(my_pthread_t id, ucontext_t context, void *(*function)(void*));
 
 /* Returns a pointer to a new pnode instance. */
 pnode *createPnode(my_pthread_t tid);
+
+/* Performs time-slice calculation per level. */
+int level_slices(int level);
 
 /* Inserts a given pnode into a given level of the MLPQ, such
 that it is the last node in that level's list (or first, if no others12

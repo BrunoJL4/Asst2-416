@@ -8,7 +8,6 @@
 
 #include "my_pthread_t.h"
 
-
 /* Define global variables here. */
 
 /* The Multi-Level Priority Queue (MLPQ).
@@ -358,7 +357,7 @@ int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) {
 /* destroy the mutex */
 int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex) {
 	//If mutex is NOT initialized
-	if (&mutex == NULL) {
+	if (mutex == NULL) {
 		return -1;
 	//Elif mutex is locked
 	} 
@@ -618,7 +617,6 @@ int runQueueHelper() {
 	// statuses to THREAD_DONE, THREAD_INTERRUPTED, or THREAD_WAITING
 	// at some point.
 	pnode *currPnode = runQueue;
-	pnode *prev = currPnode;
 	while(currPnode != NULL) {
 		my_pthread_t currId = currPnode->tid;
 		tcb *currTcb = tcbList[(uint) currId];
