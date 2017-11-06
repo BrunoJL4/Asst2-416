@@ -61,15 +61,18 @@ void* myallocate(int bytes, char * file, int line, int req){
 		while (ptr < (myBlock + TOTALMEM)) {
 			Metadata data = { BLOCK_FREE, PAGESIZE };
 			*(Metadata *)ptr = data;
+			SegMetadata segment = {BLOCK_FREE, PAGESIZE - sizeof(SegMetadata) - sizeof(Metadata) };
 			ptr += ((Metadata *)ptr)->size;
 		}
 	} //End of kernel setup and page creating	
+	
 	//IF THREAD DOES NOT HAVE A PAGE, ASSIGN ONE IF AVAILABLE
 	if (pageTable[thread] == NULL) {
 		printf("Assigning page for thread %d\n", thread);
 		char * ptr = myBlock + ((Metadata *)myBlock)->size; //Iterate through kernal
 		while (ptr < myBlock + TOTALMEM) {
 			if (((Metadata *)ptr)->used == BLOCK_FREE) { //If this page is free, claim it
+				((Metadata *)ptr)->used == BLOCK_USED;
 				pageTable[thread] = ptr;
 				break;
 			}
@@ -86,16 +89,18 @@ void* myallocate(int bytes, char * file, int line, int req){
 	//LOOK FOR FREED SEGMENT WITHIN THREADS GIVEN PAGE & COMBINE APPLICABLE SEGMENTS
 	char * ptr = pageTable[thread] + sizeof(Metadata);
 	while (ptr < pageTable[thread] + PAGESIZE) {		
-		printf("Checking for combinable segments in pageTable for thread: %d\n", thread);
+		printf("Checking for combinable segments in page for thread: %d\n", thread);
 		if (((SegMetadata *)ptr)->used == BLOCK_FREE) { //Is current segment free?
-			if (ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata) < pageTable[thread] + PAGESIZE) { //Is next segment free? (within bounds)
-				printf("Combining segments in pageTable for thread: %d\n", thread);
+			if (ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata) < pageTable[thread] + PAGESIZE) { //Is there a next segment within bounds
 				char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 					if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {		
+						printf("Combining segments in page for thread: %d\n", thread);
 						((SegMetadata *)ptr)->size += ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata); //Combine ptr & nextPtr segments
 					}
 			}	
 			if (((SegMetadata *)ptr)->size <= bytes) { //Can free segment hold requested bytes?
+				((SegMetadata *)ptr)->used = BLOCK_USED;
+				printf("Allocated thread: %d's requested space.\n", current_thread);
 				//IF ENTIRE SEGMENT WAS NOT NEEDED, SET REST TO FREE (REQUIRES A SEGMETADATA)
 				if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
 					printf("Entire segment wasn't needed, setting remaining space to free/open for thread: %d\n", thread);
@@ -141,6 +146,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		return;
 	}
 	
+	//THIS WILL CHANGE WHEN WE DO SWAP FILE
 	//IS REQUESTED SEGMENT TO BE FREE WITHIN START AND END OF ASSIGNED PAGE?
 	if(pageTable[thread] < (char *)ptr && (pageTable[thread] + PAGESIZE) > (char *)ptr)
 		((Metadata *)(ptr - sizeof(SegMetadata)))->used = BLOCK_FREE; //set flag
