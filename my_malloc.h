@@ -19,7 +19,7 @@ they can be accessed by other libraries. */
 #define free(x) mydeallocate(x, __FILE__, __LINE__, THREADREQ)
 #define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes. 
 #define THREADREQ 0 //User called
-#define LIBRARY 1 //Library called
+#define LIBRARYREQ 1 //Library called
 #define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
 
 /* Enum declarations: */
