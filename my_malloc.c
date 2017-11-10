@@ -13,7 +13,7 @@ are initialized to by default*/
 uint manager_active;
 
 /* The global array containing the memory we are "allocating" */
-static char myBlock[TOTALMEM];
+char myBlock[TOTALMEM];
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 

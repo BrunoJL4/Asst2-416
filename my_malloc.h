@@ -12,6 +12,18 @@
 plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
 
+/* Global variables. */
+
+/* Will be accessed by scheduler for moving files around in
+SIGSEGV handler. */
+extern char *myBlock;
+/* Will be accessed by scheduler for figuring out page ownership
+by thread, in SIGSEGV handler. */
+extern ThreadMetadata *threadNodeList;
+/* Will be accessed by scheduler for page bookeeping, in
+SIGSEGV handler. */
+extern PageMetadata *PageTable;
+
 
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */
@@ -48,7 +60,7 @@ typedef struct PageNode {
 	int used;
 	
 	/* Number of the next page's data for the owning thread. */
-	int next;
+	int nextPage;
 } PageMetadata;  
 
 /*
