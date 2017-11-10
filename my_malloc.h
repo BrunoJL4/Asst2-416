@@ -70,7 +70,7 @@ typedef struct SegNode {
 	/* Status of the current node, identical convention to "used" for PageNode. */
 	int used;
 	/* Size of the data allocation this segment has. */
-	unsigned short size;
+	int size;
 } SegMetadata;
 
 /* Thread Node

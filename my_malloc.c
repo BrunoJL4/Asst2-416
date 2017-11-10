@@ -6,6 +6,7 @@
 
 
 #include "my_malloc.h"
+
 /* Define global variables here. */
 
 /* Boolean 1 if manager thread is active, otherwise 0 as globals
@@ -13,7 +14,7 @@ are initialized to by default*/
 uint manager_active;
 
 /* The global array containing the memory we are "allocating" */
-char myBlock[TOTALMEM];
+char *myBlock;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -55,6 +56,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
+		// First memalign space for the kernel.
+		myBlock = memalign(PAGESIZE, TOTALMEM);
+		// Figure out how many pages the kernel needs, then make that the kernel size.
 		// the memory that would be "left over" after providing the kernel space, is also
 		// lumped into the kernel
 		int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE); 
