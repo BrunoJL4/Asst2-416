@@ -61,6 +61,9 @@ typedef struct PageNode {
 	
 	/* Number of the next page's data for the owning thread. */
 	int nextPage;
+
+	/* Thread ID of the the thread owning this page. */
+	my_pthread_t owner;
 } PageMetadata;  
 
 /*
@@ -71,6 +74,8 @@ typedef struct SegNode {
 	int used;
 	/* Size of the data allocation this segment has. */
 	unsigned int size;
+	/* Address of previous SegMetadata */
+	SegMetadata *prev;
 } SegMetadata;
 
 /* Thread Node
