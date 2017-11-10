@@ -22,12 +22,15 @@ ThreadMetadata *threadNodeList;
 /* This is the PageTable */
 PageMetadata *PageTable;
 
+
 /* End global variable declarations. */
 
 /* malloc & free function implementations */
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
+	// initialize signal alarm struct
+	memset(&mem_sig, 0, sizeof(mem_sig));
 	// establish the base size of the kernel's space in memory
 	int kernelSize = sizeof(PageMetadata) // size of its own metadata
 					 + (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer

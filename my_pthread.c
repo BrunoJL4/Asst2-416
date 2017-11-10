@@ -97,6 +97,11 @@ Declared up here to prevent allocations from occurring
 each time the runQueueHelper() runs.*/
 struct sigaction sa;
 
+/* Signal action struct used by runQueueHelper() for memprotect
+violations. This will be used for the SIGSEGV handler that handles
+read violations. */
+struct sigaction sig_mem;
+
 /* itimerval struct used by runQueueHelper() for alarms.
 Declared up here to prevent allocations from occurring
 each time the runQueueHelper() runs.*/
@@ -609,6 +614,11 @@ int runQueueHelper() {
 	// call signal handler for SIGVTALRM, which should activate
 	// each time we receive a SIGVTALRM
 	sigaction(SIGVTALRM, &sa, NULL);
+	// call signal handler for SIGSEGV, which should activate
+	// upon any segfault occurring (even ones that aren't a result
+	// of memory issues.)
+	// TODO @bruno: make sure sig mask blocks SIGVTALRM
+	sigaction(SIGSEGV, &sig_mem, NULL);
 
 	// it begins with a populated runQueue. it needs to iterate through
 	// each thread and perform the necessary functions depending on
@@ -731,10 +741,15 @@ int init_manager_thread() {
 	Manager.uc_link = NULL;
 	// attach manager context to my_pthread_manager()
 	makecontext(&Manager, (void*)&my_pthread_manager, 0);
-	// allocate memory for signal alarm struct
+	// initialize the signal alarm struct
 	memset(&sa, 0, sizeof(sa));
 	// install VTALRMhandler as the signal handler for SIGVTALRM
 	sa.sa_handler = &VTALRMhandler;
+	// initialize the sigaction struct for seg faults
+	memset(&sig_mem, 0, sizeof(sig_mem));
+	// install SIGSEGVhandler() as the signal handler for SIGSEGV.
+	sig_mem.sa_handler = &SIGSEGVhandler;
+	// TODO @bruno: implement SIGSEGVhandler(), finish sigaction-related logic.
 	return 0;
 }
 
