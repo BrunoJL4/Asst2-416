@@ -46,21 +46,43 @@ typedef struct PageNode {
 	/* The status of the current node. 0 for free/'F', 1 for allocated/'T' (used). 
 	We will, in the library, refer to these as BLOCK_FREE and BLOCK_USED*/
 	int used;
-	/* The size of the current node in bytes.
-	TODO @all: discuss how to use this for the paging project. */
-	int size; 
 	
-	//Pointer to the next
-	char * next;
-} Metadata;  
+	/* Number of the next page's data for the owning thread. */
+	int next;
+} PageMetadata;  
 
 /*
 	Like the struct above except efficiently specific for segment metadata
 */
 typedef struct SegNode {
+	/* Status of the current node, identical convention to "used" for PageNode. */
 	int used;
+	/* Size of the data allocation this segment has. */
 	unsigned short size;
 } SegMetadata;
+
+/* Thread Node
+	
+	A struct that holds data for each thread pertaining to memory allocation.
+
+*/
+typedef struct ThreadNode {
+	/* Page # of the thread's first allocated page. If Thread A allocates pages 0
+	and 1, and Thread B's context swaps in and allocates pages 0 and 1, then Thread A's
+	firstPage points to wherever its data for page 0 was. If it was swapped to
+	Page 2, then threadA.firstPage will be 2. Similarly, PageTable[threadA.firstPage].next
+	will be 3 if Thread A's data for page 1 was swapped to page 3.
+
+	This value should be a signed int, since its value can be -2 (for the kernel)
+	or -1 (for a thread with no memory allocated yet)*/
+	int firstPage;
+
+	/* Memory allocated so far for this thread. Used in operations involving both
+	page shuffling and determining victims for the Swap File. */
+	int memoryAllocated;
+} ThreadMetadata;
+
+
 
 /* Function Declarations: */
 
