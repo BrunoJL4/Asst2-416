@@ -103,9 +103,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		PageTable[MAX_NUM_THREADS + 1].memoryAllocated += (threadPages * PAGESIZE)
 		// TODO @all: Reminder: Look at above logic for how PageTable is allocated, use BLOCK_FREE status
 		// to determine whether a block should be allocated.
-
-		/* TODO @all: Here, through the memory for thread (not kernel, kernel isn't actually divided into spaces) 
-		paging and memalign all of it to page size, as described in the Asst2 spec. */
 	} //End of kernel setup and page creating
 
 	
