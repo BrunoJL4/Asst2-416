@@ -89,7 +89,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// Put PageTable before threadNodeList, allocating enough space for the remaining
 		// pages in the memory. Meaning we get the address from subtracting the size of PageTable
 		// from the address of threadNodeList.
-		int threadPages = (TOTALMEM - kernelSize)/(PAGESIZE);
+		// Also, leave that last space at the end free for the swapping/free page, used
+		// in signal handling.
+		int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 		PageTable = (PageMetadata *) (threadNodeList - (threadPages * PAGESIZE));
 		// Go through PageTable and create the structs at each space, initializing their space
 		// to be FREE and having 0 space used.
