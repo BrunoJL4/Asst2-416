@@ -36,6 +36,13 @@ void* myallocate(int bytes, char * file, int line, int req){
 					 + (MAX_NUM_THREADS * MEM) // stack allocations for child threads
 					 + ((MAX_NUM_THREADS + 2) * sizeof(ThreadMetadata)) // threadNodeList
 					 + ((TOTALMEM / PAGESIZE) * sizeof(PageMetadata)); // PageTable space, rounded up.
+	// Figure out how many pages the kernel needs (floor/round-down), add eight more
+	// pages to that, and then multiply that number of pages by PAGESIZE. That is the
+	// actual size of the kernel block, and it now starts at the beginning of
+	// an aligned page.
+	kernelSize = ((kernelSize/PAGESIZE) + 8) * PAGESIZE;
+	int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE); 
+	kernelSize += remainingMem;
 	// "thread" var represents the calling thread's ID
 	int thread;
 	// "pagesize" var represents bound size of the current page (kernel vs user)
@@ -57,12 +64,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
 		// First memalign space for the kernel.
-		myBlock = memalign(PAGESIZE, TOTALMEM);
-		// Figure out how many pages the kernel needs, then make that the kernel size.
-		// the memory that would be "left over" after providing the kernel space, is also
-		// lumped into the kernel
-		int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE); 
-		kernelSize += remainingMem;
+		myBlock = (char *) memalign(PAGESIZE, TOTALMEM);
 		// create PageMetadata for kernel's block... mark it as BLOCK_USED with kernelSize as size.
 		PageMetadata data = (PageMetadata) { BLOCK_USED, kernelSize }; 
 		// Metadata for kernel is at the beginning of the global block, and will be followed
