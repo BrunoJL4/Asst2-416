@@ -690,7 +690,10 @@ int runQueueHelper() {
 }
 
 
+/* Signal handler for SIGVTALRM.
 
+This 
+*/
 void VTALRMhandler(int signum) {
 	// DO NOT PUT A PRINT MESSAGE IN A SIGNAL HANDLER!!!
 
@@ -705,7 +708,7 @@ void VTALRMhandler(int signum) {
 }
 
 // TODO @bruno: implement SIGSEGVhandler(), finish sigaction-related logic.
-void SIGSEGVhandler(int sig, siginfo_t *si, void *unused) {
+void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 }
 
@@ -757,15 +760,15 @@ int init_manager_thread() {
 	sa.sa_handler = &VTALRMhandler;
 	// initialize the sigaction struct for seg faults
 	memset(&sig_mem, 0, sizeof(sig_mem));
-	// set signal mask so that SIGSEGVhandler() ignores SIGVTALRM
+	// set signal mask so that SEGVhandler() ignores SIGVTALRM
 	sigset_t msegv_handler_mask;
 	sigemptyset(segv_handler_mask);
 	sigaddset(&segv_handler_mask, SIGVTALRM);
 	sig_mem.sa_mask = segv_handler_mask;
 	// set signal flag so it catches siginfo
 	sig_mem.sa_flags = SA_SIGINFO;
-	// install SIGSEGVhandler() as the signal handler for SIGSEGV.
-	sig_mem.sa_handler = &SIGSEGVhandler;
+	// install SEGVhandler() as the signal handler for SIGSEGV.
+	sig_mem.sa_handler = &SEGVhandler;
 	return 0;
 }
 
