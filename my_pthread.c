@@ -613,12 +613,17 @@ int runQueueHelper() {
 
 	// call signal handler for SIGVTALRM, which should activate
 	// each time we receive a SIGVTALRM
-	sigaction(SIGVTALRM, &sa, NULL);
+	if(sigaction(SIGVTALRM, &sa, NULL) == -1) {
+		printf("Error setting up SIGVTALRMhandler in runQueueHelper!\n");
+		return -1;
+	}
 	// call signal handler for SIGSEGV, which should activate
 	// upon any segfault occurring (even ones that aren't a result
 	// of memory issues.)
-	// TODO @bruno: make sure sig mask blocks SIGVTALRM
-	sigaction(SIGSEGV, &sig_mem, NULL);
+	if(sigaction(SIGSEGV, &sig_mem, NULL) == -1) {
+		printf("Error setting up SIGSEGVhandler in runQueueHelper!\n");
+		return -1;
+	}
 
 	// it begins with a populated runQueue. it needs to iterate through
 	// each thread and perform the necessary functions depending on
@@ -699,6 +704,11 @@ void VTALRMhandler(int signum) {
 	swapcontext(&(tcbList[interrupted_thread]->context), &Manager);
 }
 
+// TODO @bruno: implement SIGSEGVhandler(), finish sigaction-related logic.
+void SIGSEGVhandler(int sig, siginfo_t *si, void *unused) {
+
+}
+
 
 int init_manager_thread() {
 	printf("Using my_pthread implementation!\n");
@@ -747,9 +757,15 @@ int init_manager_thread() {
 	sa.sa_handler = &VTALRMhandler;
 	// initialize the sigaction struct for seg faults
 	memset(&sig_mem, 0, sizeof(sig_mem));
+	// set signal mask so that SIGSEGVhandler() ignores SIGVTALRM
+	sigset_t msegv_handler_mask;
+	sigemptyset(segv_handler_mask);
+	sigaddset(&segv_handler_mask, SIGVTALRM);
+	sig_mem.sa_mask = segv_handler_mask;
+	// set signal flag so it catches siginfo
+	sig_mem.sa_flags = SA_SIGINFO;
 	// install SIGSEGVhandler() as the signal handler for SIGSEGV.
 	sig_mem.sa_handler = &SIGSEGVhandler;
-	// TODO @bruno: implement SIGSEGVhandler(), finish sigaction-related logic.
 	return 0;
 }
 
