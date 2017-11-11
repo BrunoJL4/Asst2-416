@@ -202,35 +202,145 @@ void* myallocate(int bytes, char * file, int line, int req){
 /** Smart Free **/
 void mydeallocate(void * ptr, char * file, int line, int req){
 	int thread;
-	//ERROR CONDITIONS
+	int pageIndex
+	char * index;
+	int pagesize;
+	//Set ptr to point to its SegMetadata
+	ptr = ptr - sizeof(SegMetadata);
 	if(req == THREADREQ) {
 		thread = current_thread;
+		printf("Beginning mydeallocate for thread: %d\n", current_thread);
+		
+		// TODO @Alex: replace "GLOBAL" with the global variable for the address of the first user space page
+		// TODO @Alex: replace "KERNEL" with the kernel size
+	
+		// Find the page of the memory
+		pageIndex = threadNodeList[thread].firstPage;
+		while (pageIndex != -1) {
+			// Index to the first memory address of pageIndex
+			index = GLOBAL + (pageIndex * PAGESIZE)
+			// If the address the user wishes to free belongs to this page, then break
+			if (ptr >= index && ptr < (index + PAGESIZE)) {
+				break;
+			}			
+			pageIndex = PageTable[pageIndex].nextPage;
+		}
+		// If pageIndex is -1, then we have a pagefault
+		if (pageIndex == -1) {
+			fprintf(stderr, "Pagefault! - File: %s, Line: %d.\n", file, line);
+			exit(EXIT_FAILURE);
+		}
+		pagesize = PAGESIZE;
 	}	
 	else if(req == LIBRARYREQ) {
 		thread = MAX_NUM_THREADS + 1;
+		printf("Beginning mydeallocate for thread: %d\n", current_thread);
+		index = &myBlock;
+		pagesize = KERNEL;
 	}
-	else{
+	else {
 		printf("Error! Invalid value for req: %d\n", req);
-		return;
-	}
-	printf("Beginning mydeallocate for thread: %d\n", current_thread);
-	if((void *)myBlock > ptr || ptr > (void*)(myBlock + TOTALMEM) || ptr == NULL || ((*(SegMetadata *)(ptr-sizeof(SegMetadata))).used == BLOCK_FREE && (*(SegMetadata *)(ptr-sizeof(SegMetadata))).used != BLOCK_USED)){ 
-		fprintf(stderr, "Pointer not dynamically located! - File: %s, Line: %d.\n", file, line);
-		return;
-	}
-	
-	if((*(SegMetadata *)(ptr - sizeof(SegMetadata))).used == BLOCK_FREE){
-		fprintf(stderr, "Pointer already freed! - File: %s, Line: %d.\n", file, line);
-		return;
+		exit(EXIT_FAILURE);
+	}	
+
+	// If this is not a proper segment (freed or !SegMetadata), then Segfault	
+	if (ptr < &myBlock || ptr >= &myBlock + sizeof(myBlock)) {
+		if (((SegMetadata *)ptr)->used != BLOCK_USED) {
+			fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
+			exit(EXIT_FAILURE);
+		}
 	}
 	
-	//THIS WILL CHANGE WHEN WE DO SWAP FILE
-	//IS REQUESTED SEGMENT TO BE FREE WITHIN START AND END OF ASSIGNED PAGE?
-	if(pageTable[thread] < (char *)ptr && (pageTable[thread] + PAGESIZE) > (char *)ptr)
-		((PageMetadata *)(ptr - sizeof(SegMetadata)))->used = BLOCK_FREE; //set flag
-	else
-		fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
-		
+	// Set to free
+	((SegMetadata *)ptr)->used = BLOCK_FREE;
+	// Should we wipe the memory for this segment? Do it here if so
+	
+	// Combine next block if it is free
+	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
+	if (req == THREADREQ) {
+		// Check if it is in bounds of myBlock
+		if ((ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) > (&myBlock + sizeof(myBlock))) {	
+			// START OF CHECK
+			// First check if you'll stay in pages belonging to the thread
+			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+			// Find the page of the memory
+			int endPageIndex = threadNodeList[thread].firstPage;
+			while (endPageIndex != -1) {
+				// Index to the first memory address of pageIndex
+				char * endIndex = GLOBAL + (endPageIndex * PAGESIZE)
+				// If the address the user is searching for belongs to this page, then break
+				if (nextPtr >= endIndex && nextPtr < (endPageIndex + PAGESIZE)) {
+					break;
+				}			
+				endPageIndex = PageTable[endPageIndex].nextPage;
+			}
+			// If pageIndex is -1, then we have a pagefault
+			if (endPageIndex == -1) {
+				fprintf(stderr, "Pagefault! - File: %s, Line: %d.\n", file, line);
+				exit(EXIT_FAILURE);
+			}
+			// END OF CHECK
+
+			// Confirmed next seg belongs to thread's page, so combine if free
+			if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
+				((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
+				// If we are wiping memory, wipe memory of nextPtr SegMetadata here
+				
+			}
+		}
+	}
+	// This is a kernel space combine, so we don't need to check the spanning of multiple pages
+	else {
+		if ((ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (index + KERNEL)) {
+			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+			if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
+				((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
+				// If we are wiping memory, wipe memory of nextPtr SegMetadata here
+				
+			}
+		}
+	}
+	
+	// If prev block is free, combine
+	if (((SegMetadata *)ptr)->prev != NULL) {
+		SegMetadata * prevPtr = ((SegMetadata *)ptr)->prev;
+		if (prevPtr->used == BLOCK_FREE) {
+			prevPtr->size += sizeof(SegMetadata) + ((SegMetadata *)ptr)->size;
+			// If we are wiping memory, wipe memory of ptr SegMetadata here 
+			
+			// Set ptr to the front of the new free space
+			ptr = (char *)prevPtr;
+		}
+	}
+	
+	// TODO @Alex: because segments can be multiple pages long, we could be freeing multiple pages
+	
+	// If the Segment is the size of the page AND it is at the start of a page, free the page (ONLY IF THIS IS NOT THE KERNEL)
+	if (req == THREADREQ) {
+		if ((((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= pagesize && ptr == index) {
+			// pagePtr points to the first page owned by a thread
+			// If this is the firstPage owned by a thread, set nextPage to firstPage
+			if (pageIndex == threadNodeList[thread].firstPage) {
+				threadNodeList[thread].firstPage = PageTable[threadNodeList[thread].firstPage].nextPage;
+			}
+			// If this is not firstPage, remove from LL
+			else {
+				int temp = threadNodeList[thread].firstPage;
+				while (PageTable[temp].nextPage != -1) {
+					if (PageTable[temp].nextPage == pageIndex) {
+						break;
+					}
+					temp = PageTable[temp].nextPage;
+				}
+				if (PageTable[temp].nextPage == -1) {
+					printf("Error on PageTable looping.\n");
+					exit(EXIT_FAILURE);
+				}
+				// This line essentially "frees" the page
+				PageTable[temp].nextPage = PageTable[pageIndex].nextPage;
+			}
+		}
+	}
 	
 	return;
 
