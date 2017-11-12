@@ -211,6 +211,10 @@ int runQueueHelper();
 /* This is the signal handler for our timer. */
 void VTALRMhandler(int signum);
 
+/* This is the signal handler for seg faults, which will intentionally
+occur in our memory manager. */
+void SEGVhandler(int sig, siginfo_t *si, void *unused);
+
 /* Returns a pointer to a new tcb instance. */
 tcb *createTcb(my_pthread_t id, ucontext_t context, void *(*function)(void*));
 
