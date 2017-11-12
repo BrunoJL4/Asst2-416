@@ -54,6 +54,7 @@ These structs will be stored before each individual
 block of memory in myBlock. 
 
 */
+
 typedef struct PageNode {
 	/* The status of the current node. 0 for free/'F', 1 for allocated/'T' (used). 
 	We will, in the library, refer to these as BLOCK_FREE and BLOCK_USED*/
@@ -64,6 +65,11 @@ typedef struct PageNode {
 
 	/* Thread ID of the the thread owning this page. */
 	my_pthread_t owner;
+
+	/* The address of the segment that floods into this page. NULL by default, or
+	if there are no segments that have overflowed their data into/through this page. */
+	char *parentSegment;
+
 } PageMetadata;  
 
 /*
