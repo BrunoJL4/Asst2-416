@@ -727,7 +727,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// Exit if the seg fault is a result of accessing space outside the user space
 	// (not our problem). 
 	if((requestAddr < baseAddress) || bufferPage - 1) {
-		printf("Error! Seg fault occurred at address: 0x%lx\n",(long) si->si_addr);
 		exit(EXIT_FAILURE);
 	}
 	/* Determining preceding pages for protected and stored pages, and the location
@@ -736,161 +735,164 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	Vars declared/carried over: 
 	int origPage; my_pthread_t origOwner; int storedPage; my_pthread_t storedOwner; 
 	*/
-
+	int origPage, storedPage;
+	my_pthread_t origOwner, storedOwner;
 	// Determine what original page the user's request is in. To do this,
 	// get value (requestAddr - baseAddr)/PAGESIZE. Call this origPage.
+	origPage = (requestAddr - baseAddr)/PAGESIZE;
 	// Set my_pthread_t origOwner = PageTable[origPage].owner.
-	
+	origOwner = PageTable[origPage].owner;
 	// Once we have the origPage, etc, we can flip through and find the number
 	// of the actual page storing data for the thread's request.
-
 	// To do this, set up a storedPage int value to equal
 	// threadNodeList[current_thread].firstPage.
-
+	storedPage = threadNodeList[current_thread].firstPage;
 	// Use a for loop that runs at int i = 0, and through i < origPage.
 	// Go through and set storedPage to PageTable[storedPage].nextPage
 	// for each interval.
-
-	/* Gathering information about the segment. 
-
-	Vars declared/carried over:
-	int case; char *segHead; int segSize; int headPage;
-	*/
-
-	// TODO @all: When implementing Phase C, have all accesses to actual data 
-	// (e.g. segHead and segSize ops) consider the possibility of a page in the
-	// disk. 
-
-	// Set int case to -1 by default.
-
-	// Declare char *segHead, int segSize, and int headPage.
-
-	// Calculate a value storedAddr, which gives the address of the relative offset
-	// within the stored page, that requestedAddr would have had for the original page.
-	// char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress. 
-	// This gets the offset from the baseAddress, and then modulos with PAGESIZE
-	// to determine what the offset would be from the original page. Finally, that
-	// internal offset is added to the address of the stored page.
-
-	// Cases 1 and 2 (page does NOT have parent segment):
-	// Look at PageTable[storedPage].parentSegment. If it's NULL,
-	// then the request must have been for an actual pointer and not
-	// a read into part of a segment that was allocated in a previous page. 
-
-		// Set segHead to storedAddr.
-		// Set segSize to ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
-		// Set headPage to storedPage.
-
-		// int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
-		// int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
-
-		// if lastSpace <= lastPageSpace, then the segment is contained within the
-		// requested page. Set case to 1.
-
-		// else, the segment is NOT contained within the requested page. Set case
-		// to 2.
-
-	// Cases 1, 2, and 3 (page has parent segment)
-	// If PageTable[storedPage].parentSegment is NOT NULL, then the request could
-	// have been to read a pointer whose allocation floods into storedPage, or
-	// to read a pointer that starts in storedPage, but storedPage begins with
-	// a prior segment's data overflow. 
-
-		// First, determine if the segment is within the requested page.
-		
-		// Set headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE.
-		// This rounds down the offset of the parentSegment from the baseAddr to the nearest
-		// page, telling us where the segment's head is.
-
-		// Then, set segHead = ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE) + (headPage * PAGESIZE) + baseAddress.
-		// This starts by getting the offset of the parent segment's head from the base address,
-		// and then getting its offset from its respective page. Then we add the base address,
-		// and then the page-size times the actual page the segment's head is located in. 
-
-		// Set segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
-
-		// If segHead == requestedAddr, then we have either cases 1 or 2. Determine these cases
-		// just like we did for the first part.
-			// int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
-			// int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
-
-			// if lastSpace <= lastPageSpace, then the segment is contained within the
-			// requested page. Set case to 1.
-
-			// else, set case to 2.
-
-
-		// Else, set case to 2.
-
+	int i;
+	for(i = 0; i < origPage; i++) {
+		storedPage = PageTable[storedPage].nextPage;
+	}
+	storedOwner = PageTable[storedPage].owner;
+	
 	/* Determining which case this read falls into:
 	1. Thread tries to read memory which is contained in one segment. 
 	Requested address is the actual segment.
 	2. Thread tries to read memory which is NOT contained in one segment.
-	Requested address is the actual segment.
-	3. Thread tries to read memory which is part of a previous, non-contained
-	segment. Requested address is NOT the actual segment, but just part of
-	the segment.
-	Case 3 is really handled as Case 2, since segHead and segSize are set to the
-	beginning of the segment regardless of where it may be (within the requested page,
-	or in a previous one)
+	Operations are performed above to determine where the segment begins. 
 
+	Vars declared/carried over:
+	int caseNum; char *segHead; int segSize; int headPage;
 	*/
+	// TODO @all: When implementing Phase C, have all accesses to actual data 
+	// (e.g. segHead and segSize ops) consider the possibility of a page in the
+	// disk. 
+	// Declare char *segHead, int segSize, and int headPage.
+	int caseNum, segSize, headPage;
+	char *segHead;
+	// Set int caseNum to -1 by default.
+	caseNum = -1;
+	// Calculate a value storedAddr, which gives the address of the relative offset
+	// within the stored page, that requestedAddr would have had for the original page.
+	char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress
+	// Cases 1 and 2 (page does NOT have parent segment):
+	// Look at PageTable[storedPage].parentSegment. If it's NULL,
+	// then the request must have been for an actual pointer and not
+	// a read into part of a segment that was allocated in a previous page. 
+	if(PageTable[storedPage].parentSegment == NULL) {
+		segHead = storedAddr;
+		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size;
+		// Set headPage to storedPage.
+		headPage = storedPage;
+		// Figure out if the segment overflows into other pages.
+		int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
+		int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+		// if lastSpace <= lastPageSpace, then the segment is contained within the
+		// requested page. Set case to 1.
+		if(lastSpace <= lastPageSpace) {
+			caseNum = 1;
+		}
+		// else, the segment is NOT contained within the requested page. Set case
+		// to 2.
+		else{
+			caseNum = 2;
+		}
+		
 
-	/* Handling each case's logic. Case determined by "case" variable initialized above.
+	}
+	// Cases 1, 2 (but faulting page has parent segment)
+	// If PageTable[storedPage].parentSegment is NOT NULL, then the request could
+	// have been to read a pointer whose allocation floods into storedPage, or
+	// to read a pointer that starts in storedPage, but storedPage begins with
+	// a prior segment's data overflow. 
+	else{ 
+		// First, determine if the segment is within the requested page..
+		// Round down the offset of the parentSegment from the baseAddr to the nearest
+		// page, telling us where the segment's head is.
+		headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE
+		// Set segHead to actual beginning of the segment the user is trying to read
+		// (could be in this page, or in a previous one. We'll check)
+		// Use segSize to check.
+		segHead = ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE) + (headPage * PAGESIZE) + baseAddress
+		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
+		// If segHead == requestedAddr, then we have either case 1 or 2 (segment starts
+		// in the requested page), except the page itself has overflow from another segment.
+		// Handle it identically.
+		if(segHead == requestedAddr) {
+			int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
+			int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+			// if lastSpace <= lastPageSpace, then the segment is contained within the
+			// requested page. Set case to 1.
+			if(lastSpace <= lastPageSpace) {
+				caseNum = 1;
+			}
+			// else, set case to 2.
+			else {
+				caseNum = 2;
+			}
+
+		}
+		// Else, set case to 2.
+		else {
+			caseNum = 2;
+		}
+	}
+
+	/*
+	Handling each case's logic. Case determined by "case" variable initialized above.
 
 	Used variables carried over from previous sections:
-	char *requestAddr; char *bufferPage; int origPage; int storedPage; int case; char *segHead; int segSize; int headPage;  */
+	char *requestAddr; char *bufferPage; int origPage; int storedPage; int caseNum; char *segHead; int segSize; int headPage;  */
 
 	/* Case 1 
 	If the segment in question is contained within the page, we only swap one page around.
-
-	Copying:
-	i) copy the data at the origPage's space, to bufferPage.
-	ii) copy the data at the storedPage's space, to the origPage's space.
-	iii) copy the data in bufferPage, to the storedPage's space.
-
-	Then we swap the references to each page.
-
-	Swapping algorithm for a contained page:
-	Let's say that we want to swap target pages A and B in their respective lists.
-	For example, pageA would be origPage and pageB would be storedPage.
-		I) Iteration phase, A:
-			i) Set ints prevPageA and currPageA to threadNodeList[owner_threadA].firstPage.
-			For A being origPage, owner_threadA would be origOwner... for 
-			B being storedPage, owner_threadB would be current_thread. 
-			ii) Have a while loop that iterates through Page A's owner thread
-			while currPageA != pageA. At each iteration, set prevPageA = currPageA. 
-			Then set currPageA = PageTable[currPageA].nextPage.
-			iii) Set nextPageA = PageTable[pageA].nextPage.
-		II) Iteration phase, B:
-			i-iii): Repeat above, for B.
-		III) Now that we have surrounding pages (if any) for pageA and pageB,
-		link the opposite's prev's next to the target, and then link the target's next to the
-		opposite's next. This means:
-			i) PageTable[prevPageA].nextPage = pageB
-			ii) PageTable[pageB].nextPage = nextPageA
-			iii) PageTable[prevPageB].nextPage = pageA
-			iv) PageTable[pageA].nextPage = nextPageB.
-			* This algorithm should work regardless of the placement of the pages in each
-			respective list... target is last, target is first, etc.
-		IV) If threadNodeList[owner_threadA].firstPage == targetPageA (whichever that is), then
-		set threadNodeList[owner_threadA].firstPage to targetPageB. Other way around for owner_threadB.
-		V) Protect the space where storedPage is (whichever target that is).
-	I'll just use the above algorithm and set the pages accordingly.
-
-	Since we don't have any parentSegment references to worry about, those are ignored here. 
-
-	TODO @bruno: Implement above single-page swapping algorithm with target pages A and B,
-	that accepts the necessary parameters and has a boolean to determine whether parentSegment
-	references are necessary (or we can determine that in the function).
-	Maybe call it surgicalSwap()?
 	*/
+	
+	if(caseNum == 1) {
+		/*
+		Copying:
+		i) copy the data at the origPage's space, to bufferPage.
+		ii) copy the data at the storedPage's space, to the origPage's space.
+		iii) copy the data in bufferPage, to the storedPage's space.
 
+		Then we swap the references to each page.
 
-	/* Case 2:
+		Swapping algorithm for a contained page:
+		Let's say that we want to swap target pages A and B in their respective lists.
+		For example, pageA would be origPage and pageB would be storedPage.
+			I) Iteration phase, A:
+				i) Set ints prevPageA and currPageA to threadNodeList[owner_threadA].firstPage.
+				For A being origPage, owner_threadA would be origOwner... for 
+				B being storedPage, owner_threadB would be current_thread. 
+				ii) Have a while loop that iterates through Page A's owner thread
+				while currPageA != pageA. At each iteration, set prevPageA = currPageA. 
+				Then set currPageA = PageTable[currPageA].nextPage.
+				iii) Set nextPageA = PageTable[pageA].nextPage.
+			II) Iteration phase, B:
+				i-iii): Repeat above, for B.
+			III) Now that we have surrounding pages (if any) for pageA and pageB,
+			link the opposite's prev's next to the target, and then link the target's next to the
+			opposite's next. This means:
+				i) PageTable[prevPageA].nextPage = pageB
+				ii) PageTable[pageB].nextPage = nextPageA
+				iii) PageTable[prevPageB].nextPage = pageA
+				iv) PageTable[pageA].nextPage = nextPageB.
+				* This algorithm should work regardless of the placement of the pages in each
+				respective list... target is last, target is first, etc.
+			IV) If threadNodeList[owner_threadA].firstPage == targetPageA (whichever that is), then
+			set threadNodeList[owner_threadA].firstPage to targetPageB. Other way around for owner_threadB.
+			V) Protect the space where storedPage is (whichever target that is).
+		I'll just use the above algorithm and set the pages accordingly.
+
+		Since we don't have any parentSegment references to worry about, those are ignored here. 
+
+		*/
+	}
+	else if(caseNum == 2) {
+		/* Case 2:
 
 		Here we declare/initialize/use variable numPages.
-		
 		Determine the number of pages taken up by the segment in question (including the
 		starting page). To do this, set pageSpaceRem = (baseAddress + ((headPage + 1)*PAGESIZE) - segAddress.
 		This tells us how much space remains in the segment's page. Then we set:
@@ -912,13 +914,19 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 				i) On each iteration: Target A = origPage + i, to reflect how far
 				along the actual, "original" memory we've gone. On the other hand,
 				Target B = storedPage + i, to reflect how far along we are along
-				the set of stored data pages.
+				the set of stored data pages. If TargetA == TargetB, that means that
+				the page is already owned by owner_threadB.
 			III) We have to un-protect Target A's page for each iteration.
 			III) We can probably just run a defined swapping function inside of the loop,
 			to keep this all clean.
 
 		
-	*/
+		*/
+	}
+	// shouldn't happen
+	else {
+		exit(EXIT_FAILURE);
+	}
 
 
 
