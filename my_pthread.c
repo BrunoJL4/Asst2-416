@@ -798,7 +798,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		else{
 			caseNum = 2;
 		}
-		
 
 	}
 	// Cases 1, 2 (but faulting page has parent segment)
@@ -931,8 +930,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	else {
 		exit(EXIT_FAILURE);
 	}
-
-
 
 }
 
