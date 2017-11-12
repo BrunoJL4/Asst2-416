@@ -755,7 +755,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		storedPage = PageTable[storedPage].nextPage;
 	}
 	storedOwner = PageTable[storedPage].owner;
-	
+
 	/* Determining which case this read falls into:
 	1. Thread tries to read memory which is contained in one segment. 
 	Requested address is the actual segment.
@@ -811,6 +811,10 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		// Round down the offset of the parentSegment from the baseAddr to the nearest
 		// page, telling us where the segment's head is.
 		headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE
+		// Un-protect the headPage (or it'll retain R/W permissions if it's already unprotected)
+		if(mprotect((baseAddress + (headPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+			exit(EXIT_FAILURE);
+		}
 		// Set segHead to actual beginning of the segment the user is trying to read
 		// (could be in this page, or in a previous one. We'll check)
 		// Use segSize to check.
