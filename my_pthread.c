@@ -816,7 +816,17 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 	*/
 
-	/* Handling each case's logic. */
+	/* Handling each case's logic. Case determined by "case" variable initialized above.
+	Used variables carried over from previous sections:
+	char *requestAddr; int origPage; int storedPage; char *segHead; int segSize;  */
+
+	/* Case 1 */
+
+	/* Case 2 */
+
+	/* Case 3 */
+
+
 }
 
 
