@@ -621,7 +621,7 @@ int runQueueHelper() {
 	// upon any segfault occurring (even ones that aren't a result
 	// of memory issues.)
 	if(sigaction(SIGSEGV, &sig_mem, NULL) == -1) {
-		printf("Error setting up SIGSEGVhandler in runQueueHelper!\n");
+		printf("Error setting up SEGVhandler in runQueueHelper!\n");
 		return -1;
 	}
 
@@ -652,10 +652,12 @@ int runQueueHelper() {
 		current_exited = 0;
 		// update child thread's uc_link to Manager
 		//tcbList[currId]->context.uc_link = &Manager;
+		// TODO @bruno: un-protect all of the current thread's memory pages
 		swapcontext(&Manager, &(currTcb->context));
 		// immediately turn itimer off for this thread
 		timer.it_value.tv_sec = 0;
 		timer.it_value.tv_usec = 0;
+		// TODO @bruno: protect all of the current thread's memory pages
 		// if this context resumed and current_status is still THREAD_RUNNING,
 		// then thread ran to completion before being interrupted.
 		if(current_status == THREAD_RUNNING) {
@@ -692,7 +694,9 @@ int runQueueHelper() {
 
 /* Signal handler for SIGVTALRM.
 
-This 
+This is the signal handler used in the case that a thread runs over
+its time and needs to be interrupted.
+
 */
 void VTALRMhandler(int signum) {
 	// DO NOT PUT A PRINT MESSAGE IN A SIGNAL HANDLER!!!
@@ -707,9 +711,112 @@ void VTALRMhandler(int signum) {
 	swapcontext(&(tcbList[interrupted_thread]->context), &Manager);
 }
 
-// TODO @bruno: implement SIGSEGVhandler(), finish sigaction-related logic.
-void SEGVhandler(int sig, siginfo_t *si, void *unused) {
+// TODO @bruno: implement SEGVhandler(), finish sigaction-related logic.
+/* Signal handler for SIGSEGV.
 
+This is the signal handler used in the case that a thread reads memory
+that isn't its own. 
+
+*/
+void SEGVhandler(int sig, siginfo_t *si, void *unused) {
+	char *requestAddr = (char *) si->address;
+	// Exit if the seg fault is a result of accessing space outside the user space
+	// (not our problem)
+	if((requestAddr < baseAddress) || (requestAddr >= &myBlock + sizeof(myBlock))) {
+		printf("Error! Seg fault occurred at address: 0x%lx\n",(long) si->si_addr);
+		exit(EXIT_FAILURE);
+	}
+	/* Determining preceding pages for protected and stored pages, and the location
+	of the data for the requested address in the current thread. */
+
+	// Determine what original page the user's request is in. To do this,
+	// get value (requestAddr - baseAddr)/PAGESIZE. Call this originalPage.
+	// Let origOwner be the my_pthread_t found at PageTable[origPage].owner.
+	
+	// Once we have the originalPage, etc, we can flip through and find the number
+	// of the actual page storing data for the thread's request.
+
+	// To do this, set up a storedPage int value to equal
+	// threadNodeList[current_thread].firstPage.
+
+	// Use a while loop that runs while storedPage != originalPage. Go through
+	// and set storedPage to PageTable[storedPage].nextPage.
+
+	/* Gathering information about the segment. */
+	// TODO @all: When implementing Phase C, have all accesses to actual data 
+	// (e.g. segHead and segSize ops) consider the possibility of a page in the
+	// disk. 
+
+	// Set int case to -1 by default.
+
+	// Declare char *segHead and int segSize.
+
+	// Calculate a value storedAddr, which gives the address of the relative offset
+	// within the stored page, that requestedAddr would have had for the original page.
+	// char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress. 
+	// This gets the offset from the baseAddress, and then modulos with PAGESIZE
+	// to determine what the offset would be from the original page. Finally, that
+	// internal offset is added to the address of the stored page.
+
+	// Cases 1 and 2 (page does NOT have parent segment):
+	// Look at PageTable[storedPage].parentSegment. If it's NULL,
+	// then the request must have been for an actual pointer and not
+	// a read into part of a segment that was allocated in a previous page. 
+
+		// Set segHead to storedAddr.
+		// Set segSize to ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
+
+		// int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
+		// int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+
+		// if lastSpace <= lastPageSpace, then the segment is contained within the
+		// requested page. Set case to 1.
+
+		// else, the segment is NOT contained within the requested page. Set case
+		// to 2.
+
+	// Cases 1, 2, and 3 (page has parent segment)
+	// If PageTable[storedPage].parentSegment is NOT NULL, then the request could
+	// have been to read a pointer whose allocation floods into storedPage, or
+	// to read a pointer that starts in storedPage, but storedPage begins with
+	// a prior segment's data overflow. 
+
+		// First, determine if the segment is within the requested page.
+		
+		// Set int headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE.
+		// This rounds down the offset of the parentSegment from the baseAddr to the nearest
+		// page, telling us where the segment's head is.
+
+		// Then, set segHead = ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE) + (headPage * PAGESIZE) + baseAddress.
+		// This starts by getting the offset of the parent segment's head from the base address,
+		// and then getting its offset from its respective page. Then we add the base address,
+		// and then the page-size times the actual page the segment's head is located in. 
+
+		// Set segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
+
+		// If segHead == requestedAddr, then we have either cases 1 or 2. Determine these cases
+		// just like we did for the first part.
+			// int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
+			// int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+
+			// if lastSpace <= lastPageSpace, then the segment is contained within the
+			// requested page. Set case to 1.
+
+
+		// Else, set case to 3.
+
+	/* Determining which case this read falls into:
+	1. Thread tries to read memory which is contained in one segment. 
+	Requested address is the actual segment.
+	2. Thread tries to read memory which is NOT contained in one segment.
+	Requested address is the actual segment.
+	3. Thread tries to read memory which is part of a previous, non-contained
+	segment. Requested address is NOT the actual segment, but just part of
+	the segment.
+
+	*/
+
+	/* Handling each case's logic. */
 }
 
 

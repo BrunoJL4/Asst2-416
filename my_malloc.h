@@ -59,7 +59,7 @@ typedef struct PageNode {
 	We will, in the library, refer to these as BLOCK_FREE and BLOCK_USED*/
 	int used;
 	
-	/* Number of the next page's data for the owning thread. */
+	/* Number of the next page's data for the owning thread. -1 by default.*/
 	int nextPage;
 
 	/* Thread ID of the the thread owning this page. */
