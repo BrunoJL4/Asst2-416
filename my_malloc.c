@@ -111,92 +111,67 @@ void* myallocate(int bytes, char * file, int line, int req){
 	} //End of kernel setup and page creating
 
 	
-	/* TODO @all: Implement logic separating case for kernel vs. case for normal thread.
-	Kernel's firstPage member in threadNodeList will be -2 to cause quick segfaults in error case, 
-	and req param (LIBRARYREQ vs. THREADREQ) will tell us anyways.*/
-	/* TODO @all: Re-implement below using new struct definitions/global structure definitions/
-	kernel block behavior/design where all threads start allocations at Page 0. */
-	/* TODO @all: REMINDER that we no longer use pointers to directly reference page addresses.
-	Rather, we will perform arithmetic by going to the end of myBlock and multiplying PAGESIZE/pagesize(???)
-	by the page number to find the address. PageMetadata is stored separately from the pages themselves,
-	in PageTable. Also, what we called "pageTable" before is now threadNodeList, and PageTable is an actual
-	PageTable of PageMetadata structs.*/
-	/* TODO @all: implement memprotect functionality for scheduler, along with the corresponding
-	handler. This will likely involve going into the my_pthread library and implementing such logic upon
-	each context swap, meaning we'll want to extern PageTable and threadNodeList for use there. */
-	/* ------------------------------- BELOW: REIMPLEMENTATION -------------------------------------- */
-	
-	/* TODO @all: Keep in mind that all cells in threadNodeList are initialized by default. However,
-	the firstPage member will be -1 on initialization and its memoryAllocated member will be 0. */
-	//IF THREAD DOES NOT HAVE A PAGE, ASSIGN ONE IF AVAILABLE
-	if (pageTable[thread] == NULL) {
-		printf("Assigning page for thread %d\n", thread);
-		// Go through myBlock and find the first free page
-		char * ptr = myBlock + ((PageMetadata *)myBlock)->size;
-		while (ptr < myBlock + TOTALMEM) {
-			// Claim the first free/available page
-			if (((PageMetadata *)ptr)->used == BLOCK_FREE) {
-				((PageMetadata *)ptr)->used = BLOCK_USED;
-				pageTable[thread] = ptr;
-				break;
-			}
-			// Try the next page
-			ptr += PAGESIZE;
+	//IF CALLED BY SCHEDULER
+	if(LIBRARYREQ){
+		
+		
+		
+	}else{ //IF CALLED BY THREAD
+		
+		char * pages = myBlock + kernelSize;
+		
+		//IF THREAD DOES NOT HAVE A PAGE, ASSIGN PAGE 0
+		if(threadNodeList[current_thread].firstPage == -1){			
+			//add page data in page table
+			PageMetaData data = { BLOCK_USED, -1 }; 
+			PageTable[0] = data; 				
+			//add thread data in thread node list
+			ThreadMetadata data = { 0, 0 }; //0 is threads first page(virtually), 0 memory allocated
+			threadNodeList[current_thread] = data;	
 		}
-	}
-	
-	//DID MEM MANAGER FIND A FREE PAGE?
-	if (pageTable[thread] == NULL) {
-		printf("No free pages in pageTable, thread %d\n", thread);
-		return NULL; //phaseA
-	}	
-
-	// Combine any consecutive, free segments in the current thread's page.
-	// At the same time, look and see if any free segments can store the user's request.
-	char * ptr = pageTable[thread] + sizeof(PageMetadata);
-	while (ptr < pageTable[thread] + pagesize) {		
-		printf("Checking for combinable segments in page for thread: %d\n", thread);
-		// If the current segment is free:
-		if (((SegMetadata *)ptr)->used == BLOCK_FREE) {
-			// If there is a following segment within the page:
-			if ((ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (pageTable[thread] + pagesize)) {
-				char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
-					// If that following segment is free, combine the segments.
-					// Loop for further free segments
-					while (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {		
-						((SegMetadata *)ptr)->size += ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata); //Combine ptr & nextPtr segments
-						// If there is another segment in the page, increment, otherwise break
-						if ((nextPtr + ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata)) < (pageTable[thread] + pagesize)) {
-							nextPtr = nextPtr + ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata);
-						} else {
-							break;
-						}
+		
+		
+		// THREAD HAS TO HAVE AT LEAST ONE PAGE NOW
+		// SEARCH THROUGH PAGE(S) FOR A FREE SEGMENT
+		int pageNum = threadNodeList[current_thread].firstPage){
+		while(page != -1){
+			char * ptr = pages + (PAGESIZE * pageNum); //iterate to page
+			while(ptr < ptr + PAGESIZE){
+				//current segment is free and large enough to fit requested bytes
+				if (((SegMetadata *)ptr)->used == BLOCK_FREE && ((SegMetadata *)ptr)->size >= bytes) {
+					((SegMetadata *)ptr)->used = BLOCK_USED;
+					// If the entire segment wasn't needed, take the remaining space and make another segment from it.
+					if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
+						char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
+						SegMetadata nextSegment = { BLOCK_FREE, ((SegMetadata *)ptr)->size - (bytes + sizeof(SegMetadata)) };
+						*(SegMetadata *)nextPtr = nextSegment;
+						((SegMetadata *)ptr)->size -= (sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size);
 					}
-			}	
-			// If the current segment can hold the data, use it.
-			if (((SegMetadata *)ptr)->size >= bytes) {
-				((SegMetadata *)ptr)->used = BLOCK_USED;
-				printf("Allocated thread: %d's requested space.\n", current_thread);
-				// If the entire segment wasn't needed, take the remaining space and make another segment from it.
-				if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
-					printf("Entire segment wasn't needed, setting remaining space to free/open for thread: %d\n", thread);
-					char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
-					SegMetadata nextSegment = { BLOCK_FREE, ((SegMetadata *)ptr)->size - (bytes + sizeof(SegMetadata)) };
-					*(SegMetadata *)nextPtr = nextSegment;
-					((SegMetadata *)ptr)->size -= (sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size);
+					// If the remaining space can't hold another segment, just give the remaining data to the user.
+					return (void *)(ptr + sizeof(SegMetadata));
 				}
-				// If the remaining space can't hold another segment, just give the remaining data to the user.
-				// TODO @all: Is this a valid approach? It could cause segfaults.
-				return (void *)(ptr + sizeof(SegMetadata));
+				// segment is not free, iterate to next segment
+				ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			}
-		}
-		// segment is not free, iterate to next segment
-		ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
-	}
+			//page is not free, iterate to next page
+			pageNum = PageTable[pageNum].next;
+		}	
+		
+		// NO FREE SEGMENT, MUST ASSIGN ANOTHER PAGE
+		// PAGENUM + 1 WILL BE NEXT
+		
+		//add page data in page table
+		PageMetaData data = { BLOCK_USED, -1 }; 
+			PageTable[0] = data; 	
 	
-	// NO SEGMENTS AVAILABLE
-	printf("No segments available for thread: %d\n", thread);
-	return NULL; //phase A
+	
+	
+	
+	
+	
+	
+	
+		
 }
 
 /** Smart Free **/
