@@ -880,9 +880,10 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 	Since we don't have any parentSegment references to worry about, those are ignored here. 
 
-	// TODO @bruno: Implement above single-page swapping algorithm with target pages A and B,
+	TODO @bruno: Implement above single-page swapping algorithm with target pages A and B,
 	that accepts the necessary parameters and has a boolean to determine whether parentSegment
 	references are necessary (or we can determine that in the function).
+	Maybe call it surgicalSwap()?
 	*/
 
 
@@ -912,6 +913,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 				along the actual, "original" memory we've gone. On the other hand,
 				Target B = storedPage + i, to reflect how far along we are along
 				the set of stored data pages.
+			III) We have to un-protect Target A's page for each iteration.
 			III) We can probably just run a defined swapping function inside of the loop,
 			to keep this all clean.
 
