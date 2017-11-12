@@ -919,10 +919,10 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 				along the actual, "original" memory we've gone. On the other hand,
 				Target B = storedPage + i, to reflect how far along we are along
 				the set of stored data pages. If TargetA == TargetB, that means that
-				the page is already owned by owner_threadB.
-			III) We have to un-protect Target A's page for each iteration.
-			III) We can probably just run a defined swapping function inside of the loop,
-			to keep this all clean.
+				the page is already owned by owner_threadB, and we continue without
+				running for that iteration.
+			III) We have to un-protect Target A's page for each iteration, at the beginning.
+			It'll be protected at the end.
 
 		
 		*/
