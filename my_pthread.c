@@ -731,9 +731,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	}
 	/* Determining preceding pages for protected and stored pages, and the location
 	of the data for the requested address in the current thread. 
-
-	Vars declared/carried over: 
-	int origPage; my_pthread_t origOwner; int storedPage; my_pthread_t storedOwner; 
 	*/
 	int origPage, storedPage;
 	my_pthread_t origOwner, storedOwner;
@@ -742,33 +739,31 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	origPage = (requestAddr - baseAddr)/PAGESIZE;
 	// Set my_pthread_t origOwner = PageTable[origPage].owner.
 	origOwner = PageTable[origPage].owner;
-	// Once we have the origPage, etc, we can flip through and find the number
-	// of the actual page storing data for the thread's request.
-	// To do this, set up a storedPage int value to equal
-	// threadNodeList[current_thread].firstPage.
+	// Get page where the data being requested by the user is actually stored.
 	storedPage = threadNodeList[current_thread].firstPage;
-	// Use a for loop that runs at int i = 0, and through i < origPage.
-	// Go through and set storedPage to PageTable[storedPage].nextPage
-	// for each interval.
 	int i;
 	for(i = 0; i < origPage; i++) {
 		storedPage = PageTable[storedPage].nextPage;
 	}
+	// Get owner of the stored page (should be current thread)
 	storedOwner = PageTable[storedPage].owner;
+	if(storedOwner != current_thread) {
+		exit(EXIT_FAILURE);
+	}
 
 	/* Determining which case this read falls into:
 	1. Thread tries to read memory which is contained in one segment. 
 	Requested address is the actual segment.
 	2. Thread tries to read memory which is NOT contained in one segment.
 	Operations are performed above to determine where the segment begins. 
-
-	Vars declared/carried over:
-	int caseNum; char *segHead; int segSize; int headPage;
+	TODO @all: When implementing Phase C, have all accesses to actual data 
+	(e.g. segHead and segSize ops) consider the possibility of a page in the
+	disk. 
 	*/
-	// TODO @all: When implementing Phase C, have all accesses to actual data 
-	// (e.g. segHead and segSize ops) consider the possibility of a page in the
-	// disk. 
-	// Declare char *segHead, int segSize, and int headPage.
+
+	// Variables to store (respectively) the type of case we're dealing with,
+	// the size of the segment, the page of the actual/stored segment's head,
+	// and the address of said head.
 	int caseNum, segSize, headPage;
 	char *segHead;
 	// Set int caseNum to -1 by default.
@@ -777,11 +772,10 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// within the stored page, that requestedAddr would have had for the original page.
 	char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress
 	// Cases 1 and 2 (page does NOT have parent segment):
-	// Look at PageTable[storedPage].parentSegment. If it's NULL,
-	// then the request must have been for an actual pointer and not
-	// a read into part of a segment that was allocated in a previous page. 
 	if(PageTable[storedPage].parentSegment == NULL) {
 		segHead = storedAddr;
+		// Should be able to access the actual/storing page since it should
+		// be owned by the thread.
 		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size;
 		// Set headPage to storedPage.
 		headPage = storedPage;
@@ -807,8 +801,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// a prior segment's data overflow. 
 	else{ 
 		// First, determine if the segment is within the requested page..
-		// Round down the offset of the parentSegment from the baseAddr to the nearest
-		// page, telling us where the segment's head is.
 		headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE
 		// Un-protect the headPage (or it'll retain R/W permissions if it's already unprotected)
 		if(mprotect((baseAddress + (headPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
@@ -816,8 +808,8 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		}
 		// Set segHead to actual beginning of the segment the user is trying to read
 		// (could be in this page, or in a previous one. We'll check)
-		// Use segSize to check.
 		segHead = ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE) + (headPage * PAGESIZE) + baseAddress
+		// Use segSize to check.
 		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
 		// If segHead == requestedAddr, then we have either case 1 or 2 (segment starts
 		// in the requested page), except the page itself has overflow from another segment.
@@ -836,7 +828,11 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 			}
 
 		}
-		// Else, set case to 2.
+		// Else, set case to 2. We handle the case where the protected page was in
+		// a "later" page than the segment's head, identically to the case where
+		// we have an overflowing page at the address the user tried to access.
+		// This is because in both cases, segHead points to the head of a segment
+		// that overflows.
 		else {
 			caseNum = 2;
 		}
