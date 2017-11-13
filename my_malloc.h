@@ -63,7 +63,7 @@ typedef struct PageNode {
 	/* Number of the next page's data for the owning thread. -1 by default.*/
 	int nextPage;
 
-	/* Thread ID of the the thread owning this page. */
+	/* Thread ID of the the thread owning this page. -1 by default.  */
 	my_pthread_t owner;
 
 	/* The address of the segment that floods into this page. NULL by default, or

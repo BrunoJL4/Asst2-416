@@ -14,7 +14,7 @@ are initialized to by default*/
 uint manager_active;
 
 /* The global array containing the memory we are "allocating" */
-char *myBlock;
+char * myBlock = (char *)memalign(TOTALMEM, PAGESIZE);
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -22,6 +22,26 @@ ThreadMetadata *threadNodeList;
 /* This is the PageTable */
 PageMetadata *PageTable;
 
+/* This is the start address of the pages */
+char * pages = myBlock + kernelSize; 
+
+/* establish the base size of the kernel's space in memory */
+int kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
+	 + (MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
+	 + (sizeof(pnode *) + sizeof(tcb **)) // MLPQ & tcbList
+	 + (MAX_NUM_THREADS * MEM) // stack allocations for child threads
+	 + ((MAX_NUM_THREADS + 2) * sizeof(ThreadMetadata)) // threadNodeList
+	 + ((TOTALMEM / PAGESIZE) * sizeof(PageMetadata)); // PageTable space, rounded up.
+	
+	
+/* Figure out how many pages the kernel needs (floor/round-down), add eight more
+pages to that, and then multiply that number of pages by PAGESIZE. That is the
+actual size of the kernel block, and it now starts at the beginning of
+an aligned page	*/
+kernelSize = ((kernelSize/PAGESIZE) + 8) * PAGESIZE;
+
+/* Base address: points to start of pages */
+char * baseAddress = myBlock + kernelSize; 
 
 /* End global variable declarations. */
 
@@ -29,45 +49,17 @@ PageMetadata *PageTable;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
+	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
+	
 	// initialize signal alarm struct
 	memset(&mem_sig, 0, sizeof(mem_sig));
-	// establish the base size of the kernel's space in memory
-	int kernelSize = sizeof(PageMetadata) // size of its own metadata
-					 + (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
-					 + (MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
-					 + (sizeof(pnode *) + sizeof(tcb **)) // MLPQ & tcbList
-					 + (MAX_NUM_THREADS * MEM) // stack allocations for child threads
-					 + ((MAX_NUM_THREADS + 2) * sizeof(ThreadMetadata)) // threadNodeList
-					 + ((TOTALMEM / PAGESIZE) * sizeof(PageMetadata)); // PageTable space, rounded up.
-	// Figure out how many pages the kernel needs (floor/round-down), add eight more
-	// pages to that, and then multiply that number of pages by PAGESIZE. That is the
-	// actual size of the kernel block, and it now starts at the beginning of
-	// an aligned page.
-	kernelSize = ((kernelSize/PAGESIZE) + 8) * PAGESIZE;
-	int remainingMem = (TOTALMEM - kernelSize ) % (PAGESIZE); 
-	kernelSize += remainingMem;
-	// "thread" var represents the calling thread's ID
-	int thread;
-	// "pagesize" var represents bound size of the current page (kernel vs user)
-	int pagesize;
-	if(req == THREADREQ) {
-		thread = current_thread;
-		pagesize = PAGESIZE;
-	}	
-	else if(req == LIBRARYREQ) {
-		thread = MAX_NUM_THREADS + 1;
-		pagesize = kernelSize;
-	}
-	else{
-		printf("Error! Invalid value for req: %d\n", req);
-		return NULL;
-	}
-	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
+	//prot_none threads pages
+	
+	
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
-		// First memalign space for the kernel.
-		myBlock = (char *) memalign(PAGESIZE, TOTALMEM);
+
 		// create PageMetadata for kernel's block... mark it as BLOCK_USED with kernelSize as size.
 		PageMetadata data = (PageMetadata) { BLOCK_USED, kernelSize }; 
 		// Metadata for kernel is at the beginning of the global block, and will be followed
@@ -100,78 +92,111 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// to be FREE and having 0 space used.
 		for(i = 0; i < PAGESIZE - 1; i++) {
 			// Make new PageMetadata struct and copy it to PageTable
-			PageMetadata newData = {BLOCK_FREE, 0};
+			PageMetadata newData = {BLOCK_FREE, -1, -1, NULL};
 			PageTable[i] = newData;
 
 		}
 		// Increase counter for memory allocated by kernel, now that we've allocated PageTable.
 		PageTable[MAX_NUM_THREADS + 1].memoryAllocated += (threadPages * PAGESIZE)
-		// TODO @all: Reminder: Look at above logic for how PageTable is allocated, use BLOCK_FREE status
-		// to determine whether a block should be allocated.
+		
+		//protect data
+		if((mprotect(myBlock, TOTALMEM, PROT_READ)) != 0){
+			//error
+		}
+		if((mprotect(myBlock, TOTALMEM, PROT_WRITE)) != 0){
+			//error
+		}
+
 	} //End of kernel setup and page creating
 
 	
 	//IF CALLED BY SCHEDULER
 	if(LIBRARYREQ){
 		
-		
+		//USE FREEBYTES VAR TO DETERMINE POINTER ASKED FOR
+		//GLOBAL VARIABLE??
+		//WHAT DID BRUNO SUGGEST EARYLIER?
 		
 	}else{ //IF CALLED BY THREAD
 		
-		char * pages = myBlock + kernelSize;
+		//FIND FREE SEGMENT WITHIN THREADS PAGE(S)
+		int pageNum = pagethreadNodeList[thread].firstPage; //threads first page
+		char * ptr = baseAddress + (PAGESIZE * pageNum);
+		while(pageNum != -1){
 		
-		//IF THREAD DOES NOT HAVE A PAGE, ASSIGN PAGE 0
-		if(threadNodeList[current_thread].firstPage == -1){			
-			//add page data in page table
-			PageMetaData data = { BLOCK_USED, -1 }; 
-			PageTable[0] = data; 				
-			//add thread data in thread node list
-			ThreadMetadata data = { 0, 0 }; //0 is threads first page(virtually), 0 memory allocated
-			threadNodeList[current_thread] = data;	
+			if(((SegMetadata *)ptr)->used == BLOCK_FREE){
+				//does block have room for requested bytes
+				//if(((SegMetadata *)ptr)->size > sizeof(SegMetadata) + 1)
+				
+				
+				
+				
+				
+				
+				
+				
+			}
+					
+			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+			
+			//DIRTY DIRTY CASE: if chunk leaks off page
+			if(ptr > ptr + PAGESIZE){
+				bytesLeaked = ptr - (pageNum+1*PAGESIZE) - baseAddress; 
+				//iterate pageNum depending on how many bytes leaked
+				for(int i = 0; i < ceil(bytesLeaked/PAGESIZE); i++){
+					pageNum = PageTable[pageNum].nextPage;
+				}
+				ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
+			}
 		}
 		
+		//FREE SEGMENT WAS NOT AVAILABLE WITHIN THREADS PAGE(S)
+		//CREATE NEW PAGES TO GIVE SEGMENT
 		
-		// THREAD HAS TO HAVE AT LEAST ONE PAGE NOW
-		// SEARCH THROUGH PAGE(S) FOR A FREE SEGMENT
-		int pageNum = threadNodeList[current_thread].firstPage){
-		while(page != -1){
-			char * ptr = pages + (PAGESIZE * pageNum); //iterate to page
-			while(ptr < ptr + PAGESIZE){
-				//current segment is free and large enough to fit requested bytes
-				if (((SegMetadata *)ptr)->used == BLOCK_FREE && ((SegMetadata *)ptr)->size >= bytes) {
-					((SegMetadata *)ptr)->used = BLOCK_USED;
-					// If the entire segment wasn't needed, take the remaining space and make another segment from it.
-					if (((SegMetadata *)ptr)->size > (bytes + sizeof(SegMetadata))) {
-						char * nextPtr = ptr + sizeof(SegMetadata) + bytes;
-						SegMetadata nextSegment = { BLOCK_FREE, ((SegMetadata *)ptr)->size - (bytes + sizeof(SegMetadata)) };
-						*(SegMetadata *)nextPtr = nextSegment;
-						((SegMetadata *)ptr)->size -= (sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size);
+		if(((SegMetadata *)ptr->used == BLOCK_FREE)){
+			
+		}
+		//IF PTR IS USED START ON NEXT PAGE
+		
+		
+		//SAME AS THREAD 0, BUT 
+		//IF FREE, USED THOSE BYTES AS WELL FOR ALLOCATION
+
+		//THREAD IS NOT ASSIGNED A PAGE
+		if(threadNodeList[current_thread].firstPage == -1){	
+			if([pageTable[0].used == BLOCK_USED){ //page 0 is used by another thread
+				//find free page to swap w/ page 0
+				for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
+					if(pageTable[i].used == BLOCK_FREE){
+						//found one!
+						
+						//owner of page 0's first page is now i 
+						threadNodeList[pageTable[0].owner].firstPage = i;
+						
+						//page i is used and owned
+						pageTable[i].used = BLOCK_USED;
+						pageTable[i].owner = pageTable[0].owner;
+						
+						//set permissions and reallocate page's contents
+						mprotect(baseAddress, PAGESIZE, PROT_READ);
+						mprotect(baseAddress, PAGESIZE, PROT_WRITE);
+						memcpy(baseAddress, baseAddress + (PAGESIZE * i));
+						mprotect(baseAddress + (PAGESIZE * i), PAGESIZE, PROT_NONE);
+						
 					}
-					// If the remaining space can't hold another segment, just give the remaining data to the user.
-					return (void *)(ptr + sizeof(SegMetadata));
 				}
-				// segment is not free, iterate to next segment
-				ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			}
-			//page is not free, iterate to next page
-			pageNum = PageTable[pageNum].next;
-		}	
-		
-		// NO FREE SEGMENT, MUST ASSIGN ANOTHER PAGE
-		// PAGENUM + 1 WILL BE NEXT
-		
-		//add page data in page table
-		PageMetaData data = { BLOCK_USED, -1 }; 
-			PageTable[0] = data; 	
-	
-	
-	
-	
-	
-	
-	
-	
-		
+
+			//could not find a free page to give contents of page 0 to
+			if(threadNodeList[current_thread].firstPage == -1) 
+					return NULL;
+					
+
+			//page 0 is (now) free, so give to curent thread; 
+			threadNodeList[current_thread].firstPage = 0; 
+			pageTable[0].owner = current_thread; 
+		} 
+	}
 }
 
 /** Smart Free **/
