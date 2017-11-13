@@ -22,9 +22,6 @@ ThreadMetadata *threadNodeList;
 /* This is the PageTable */
 PageMetadata *PageTable;
 
-/* This is the start address of the pages */
-char * pages = myBlock + kernelSize; 
-
 /* establish the base size of the kernel's space in memory */
 int kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
 	 + (MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
@@ -43,6 +40,9 @@ kernelSize = ((kernelSize/PAGESIZE) + 8) * PAGESIZE;
 /* Base address: points to start of pages */
 char * baseAddress = myBlock + kernelSize; 
 
+/* Address of freed block in kernel, will be allocating kernel from L to R */
+char * freeKernelPtr;
+
 /* End global variable declarations. */
 
 /* malloc & free function implementations */
@@ -51,24 +51,24 @@ char * baseAddress = myBlock + kernelSize;
 void* myallocate(int bytes, char * file, int line, int req){
 	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
 	
-	// initialize signal alarm struct
+	// INITIALIZE SIGNAL ALARM STRUCT
 	memset(&mem_sig, 0, sizeof(mem_sig));
 	
 	
-	//prot_none threads pages
-	
-	
-	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION(FIRST MALLOC))
+	// SET THREAD'S PAGES TO PROT_WRITE/READ
+    int page;
+    for(page = threadNodeList[current_thread].firstPage; page != -1; page = pageTable[page].next){
+        memprotect(baseAddress + (page * PAGESIZE), PAGESIZE, PROT_READ)
+	    memprotect(baseAddress + (page * PAGESIZE), PAGESIZE, PROT_WRITE)
+    }
+    
+	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
 
 		myBlock = (char *)memalign(TOTALMEM, PAGESIZE);
-		
-		// create PageMetadata for kernel's block... mark it as BLOCK_USED with kernelSize as size.
-		PageMetadata data = (PageMetadata) { BLOCK_USED, kernelSize }; 
-		// Metadata for kernel is at the beginning of the global block, and will be followed
-		// by freely-usable space for kernel allocations (in the scheduler)
-		*(PageMetadata *)myBlock = data;
+        freeKernelPtr = myBlock; //to keep track of free space in kernel, will do allocations from L to R
+
 		// threadNodeList is put in the "last" space in the kernel block... each cell stores a struct, so
 		// threadNodeList is set to a pointer with size enough to store all of the ThreadMetadata structs.
 		threadNodeList = (ThreadMetadata *) ((myBlock + kernelSize) - ((MAX_NUM_THREADS + 2) * sizeof(ThreadMetadata)));
@@ -117,10 +117,13 @@ void* myallocate(int bytes, char * file, int line, int req){
 	//IF CALLED BY SCHEDULER
 	if(LIBRARYREQ){
 		
-		//TO DO:
-		//USE FREEBYTES VAR TO DETERMINE POINTER ASKED FOR
-		//GLOBAL VARIABLE??
-		
+        //store start to requested block
+        char * ret = freeKernelPtr;
+        //point to next free block
+        freeKernelPtr + bytes;
+        
+        return (void *)ret;
+
 	}else{ //IF CALLED BY THREAD
 		
 		//FIND FREE SEGMENT WITHIN THREADS PAGE(S)
@@ -129,7 +132,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		char * ptr = baseAddress + (PAGESIZE * pageNum);
 		while(pageNum != -1){
 			
-			//If this segment has enough space, assign user requested space, set remaining to free, and return
 			if(((SegMetadata *)ptr)->used == BLOCK_FREE){
 				//does block have room for requested bytes
 				if(((SegMetadata *)ptr)->size >= bytes)
@@ -137,7 +139,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 					//if entire block wasn't needed, set rest to free
 					if(((SegMetadata *)ptr)->size > bytes + sizeof(SegMetadata)){
 						
-						//TO DO:
+						int i = 
 						//ITERATE AMOUNT OF PAGES TO PUT SEGMENT DATA FOR REST OF FREED BLOCK_FREE
 						//nextPtr = ......
 						//SegmentData nextSegment = {}
