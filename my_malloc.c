@@ -349,30 +349,81 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 	}
 	
 	// TODO @Alex: because segments can be multiple pages long, we could be freeing multiple pages
+	//REMEMBER: change the size of the segment if you don't free the page containing the segment
+	//Also may need to create a new segment for continuing pages
 	
 	// If the Segment is the size of the page AND it is at the start of a page, free the page (ONLY IF THIS IS NOT THE KERNEL)
 	if (req == THREADREQ) {
-		if ((((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= pagesize && ptr == index) {
-			// pagePtr points to the first page owned by a thread
-			// If this is the firstPage owned by a thread, set nextPage to firstPage
-			if (pageIndex == threadNodeList[thread].firstPage) {
-				threadNodeList[thread].firstPage = PageTable[threadNodeList[thread].firstPage].nextPage;
+		// If this segment is at least the size of a page, check if or how many pages need to be freed
+		if ((((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= pagesize) {
+			// Find out how many pages will need to be freed and the starting pageIndex
+			int numPages;
+			int remainder;
+			SegMetadata * prev;
+			if (ptr == index) {
+				// We will free the first pageIndex
+				// This makes things easy to find how many pages freed
+				remainder = (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) % PAGESIZE;
+				numPages = (((SegMetadata *)ptr)->size + sizeof(SegMetadata) - remainder) / PAGESIZE;
+				prev = ((SegMetadata *)ptr)->prev;
+				
+			} else {
+				// pageIndex will be the next page IF we are freeing
+				pageIndex = PageTable[pageIndex].nextPage;
+				// figure out how much memory leaked over from the previous page segment
+				// treat the nextPage like it was a new segment and do the same thing as the if condition above
+				int overFlow = ptr - (index + PAGESIZE);
+				overFlow = (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) - overFlow;
+				// overFlow is now the size of the segment in the continuing pages
+				remainder = overFlow % PAGESIZE;
+				numPages = (overFlow - remainder) / PAGESIZE;	
+				prev = ptr;
+				
+				// IF there are pages being freed, then change the size of the segment
+				if (numPages > 0) {
+					((SegMetadata *)ptr->size = (sizeof(SegMetadata) + ptr) - (index + PAGESIZE);
+				}
 			}
-			// If this is not firstPage, remove from LL
-			else {
-				int temp = threadNodeList[thread].firstPage;
-				while (PageTable[temp].nextPage != -1) {
-					if (PageTable[temp].nextPage == pageIndex) {
-						break;
+			
+			// index is now the memory address of the last remainder of the segment
+			index += numPages * PAGESIZE;
+			// IF pages will be freed, create new segment at start of last page
+			if (numPages > 0 && remainder > sizeof(SegMetadata)) {
+				SegMetadata newSeg = { BLOCK_FREE, remainder - sizeof(SegMetadata), prev };
+				((SegMetadata *)index = newSeg;
+			// IF there is not enough space for the new segment, combine it to prev
+			} else if (numPages > 0) {
+				((SegMetadata *)prev)->size += remainder;
+			}
+			
+			// Loop through to the end of segment size and set pageIndex to pages you will free
+			while (numPages > 0) {
+				
+				// pagePtr points to the first page owned by a thread
+				// If this is the firstPage owned by a thread, set nextPage to firstPage
+				if (pageIndex == threadNodeList[thread].firstPage) {
+					threadNodeList[thread].firstPage = PageTable[threadNodeList[thread].firstPage].nextPage;
+				}
+				// If this is not firstPage, remove from LL
+				else {
+					int temp = threadNodeList[thread].firstPage;
+					while (PageTable[temp].nextPage != -1) {
+						if (PageTable[temp].nextPage == pageIndex) {
+							break;
+						}
+						temp = PageTable[temp].nextPage;
 					}
-					temp = PageTable[temp].nextPage;
+					if (PageTable[temp].nextPage == -1) {
+						printf("Error on PageTable looping.\n");
+						exit(EXIT_FAILURE);
+					}
+					// This line essentially "frees" the page
+					PageTable[temp].nextPage = PageTable[pageIndex].nextPage;
 				}
-				if (PageTable[temp].nextPage == -1) {
-					printf("Error on PageTable looping.\n");
-					exit(EXIT_FAILURE);
-				}
-				// This line essentially "frees" the page
-				PageTable[temp].nextPage = PageTable[pageIndex].nextPage;
+				
+				// increment pageIndex and decrement numPages
+				pageIndex = PageTable[pageIndex].nextPage;
+				numPages--;
 			}
 		}
 	}
@@ -380,4 +431,3 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 	return;
 
 }
-
