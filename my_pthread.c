@@ -644,20 +644,37 @@ int runQueueHelper() {
 		// to this thread. set timer type to VIRTUAL_TIMER.
 		timer.it_value.tv_sec = 0;
 		timer.it_value.tv_usec = (25000) * slicesLeft;
+		// TODO @all: if the currPage is out of scope of the user space, we
+		// shouldn't be modifying/changing it (e.g. in a swap file). make
+		// sure for phase C that this logic works.
+		// un-protect all of the current thread's memory pages
+		int currPage = threadNodeList[current_thread].firstPage;
+		while(currPage != -1) {
+			if(mprotect((baseAddress + (currPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+				exit(EXIT_FAILURE);
+			}
+			currPage = PageTable[currPage].nextPage;
+		}
 		setitimer(ITIMER_VIRTUAL, &timer, NULL);
-
 		// swap contexts with this child thread.
 		current_thread = currId;
 		// set current_exited to 0;
 		current_exited = 0;
 		// update child thread's uc_link to Manager
 		//tcbList[currId]->context.uc_link = &Manager;
-		// TODO @bruno: un-protect all of the current thread's memory pages
 		swapcontext(&Manager, &(currTcb->context));
 		// immediately turn itimer off for this thread
 		timer.it_value.tv_sec = 0;
 		timer.it_value.tv_usec = 0;
-		// TODO @bruno: protect all of the current thread's memory pages
+		// protect all of the current thread's memory pages (whichever
+		// those may be after the thread ran)
+		currPage = threadNodeList[current_thread].firstPage;
+		while(currPage != -1) {
+			if(mprotect((baseAddress + (currPage * PAGESIZE)), PAGESIZE, PROT_NONE) == -1) {
+				exit(EXIT_FAILURE);
+			}
+			currPage = PageTable[currPage].nextPage;
+		}
 		// if this context resumed and current_status is still THREAD_RUNNING,
 		// then thread ran to completion before being interrupted.
 		if(current_status == THREAD_RUNNING) {
@@ -711,7 +728,6 @@ void VTALRMhandler(int signum) {
 	swapcontext(&(tcbList[interrupted_thread]->context), &Manager);
 }
 
-// TODO @bruno: implement SEGVhandler(), finish sigaction-related logic.
 // TODO @bruno: make sure baseAddress global is initialized and externalized.
 /* Signal handler for SIGSEGV.
 
@@ -735,7 +751,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	int origPage, storedPage;
 	my_pthread_t origOwner, storedOwner;
 	// Determine what original page the user's request is in. To do this,
-	// get value (requestAddr - baseAddr)/PAGESIZE. Call this origPage.
+	// get value (requestAddr - baseAddress)/PAGESIZE. Call this origPage.
 	origPage = (requestAddr - baseAddr)/PAGESIZE;
 	// Set my_pthread_t origOwner = PageTable[origPage].owner.
 	origOwner = PageTable[origPage].owner;
@@ -771,11 +787,11 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// Calculate a value storedAddr, which gives the address of the relative offset
 	// within the stored page, that requestedAddr would have had for the original page.
 	char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress
-	// Cases 1 and 2 (page does NOT have parent segment):
+	// Cases 1 and 2 (requested page does NOT have parent segment):
 	if(PageTable[storedPage].parentSegment == NULL) {
 		segHead = storedAddr;
 		// Should be able to access the actual/storing page since it should
-		// be owned by the thread.
+		// be owned by the thread (no protection)
 		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size;
 		// Set headPage to storedPage.
 		headPage = storedPage;
@@ -800,16 +816,18 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// to read a pointer that starts in storedPage, but storedPage begins with
 	// a prior segment's data overflow. 
 	else{ 
-		// First, determine if the segment is within the requested page..
+		// First, determine how far along the segment's original location was in the user space.
 		headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE
-		// Un-protect the headPage (or it'll retain R/W permissions if it's already unprotected)
+		// Un-protect the original headPage (or it'll retain R/W permissions if it's already unprotected)
 		if(mprotect((baseAddress + (headPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
 			exit(EXIT_FAILURE);
 		}
-		// Set segHead to actual beginning of the segment the user is trying to read
-		// (could be in this page, or in a previous one. We'll check)
-		segHead = ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE) + (headPage * PAGESIZE) + baseAddress
-		// Use segSize to check.
+		// Set segHead to actual beginning of the segment the user is trying to read...
+		// headPage points to the original page in memory where the parent segment was
+		// allocated. we use headPage to determine how far along the requesting thread's
+		// page list we need to go to find the actual location of the stored segment right now.
+		segHead = baseAddress + (headPage * PAGESIZE) + ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE)
+		// Get the size of the segment.
 		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
 		// If segHead == requestedAddr, then we have either case 1 or 2 (segment starts
 		// in the requested page), except the page itself has overflow from another segment.
@@ -840,93 +858,167 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 	/*
 	Handling each case's logic. Case determined by "case" variable initialized above.
-
-	Used variables carried over from previous sections:
-	char *requestAddr; char *bufferPage; int origPage; int storedPage; int caseNum; char *segHead; int segSize; int headPage;  */
+	 */
 
 	/* Case 1 
 	If the segment in question is contained within the page, we only swap one page around.
 	*/
-	
 	if(caseNum == 1) {
-		/*
-		Copying:
-		i) copy the data at the origPage's space, to bufferPage.
-		ii) copy the data at the storedPage's space, to the origPage's space.
-		iii) copy the data in bufferPage, to the storedPage's space.
-
-		Then we swap the references to each page.
-
-		Swapping algorithm for a contained page:
-		Let's say that we want to swap target pages A and B in their respective lists.
-		For example, pageA would be origPage and pageB would be storedPage.
-			I) Iteration phase, A:
-				i) Set ints prevPageA and currPageA to threadNodeList[owner_threadA].firstPage.
-				For A being origPage, owner_threadA would be origOwner... for 
-				B being storedPage, owner_threadB would be current_thread. 
-				ii) Have a while loop that iterates through Page A's owner thread
-				while currPageA != pageA. At each iteration, set prevPageA = currPageA. 
-				Then set currPageA = PageTable[currPageA].nextPage.
-				iii) Set nextPageA = PageTable[pageA].nextPage.
-			II) Iteration phase, B:
-				i-iii): Repeat above, for B.
-			III) Now that we have surrounding pages (if any) for pageA and pageB,
-			link the opposite's prev's next to the target, and then link the target's next to the
-			opposite's next. This means:
-				i) PageTable[prevPageA].nextPage = pageB
-				ii) PageTable[pageB].nextPage = nextPageA
-				iii) PageTable[prevPageB].nextPage = pageA
-				iv) PageTable[pageA].nextPage = nextPageB.
-				* This algorithm should work regardless of the placement of the pages in each
-				respective list... target is last, target is first, etc.
-			IV) If threadNodeList[owner_threadA].firstPage == targetPageA (whichever that is), then
-			set threadNodeList[owner_threadA].firstPage to targetPageB. Other way around for owner_threadB.
-			V) Protect the space where storedPage is (whichever target that is).
-		I'll just use the above algorithm and set the pages accordingly.
-
-		Since we don't have any parentSegment references to worry about, those are ignored here. 
-
-		*/
+		swapPages(origPage, storedPage);
+		return;
 	}
+	/* Case 2
+	If the segment in question is contained in multiple pages, we swap all of those
+	pages around.
+	*/
 	else if(caseNum == 2) {
-		/* Case 2:
+		// determine number of pages taken up by the segment we're trying to read (including
+		// its starting page)
+		int numPages, segSpaceRem, firstSpaceUsed, remainder;
+		// start by making a counter to keep track of how much space of the segment's
+		// we haven't accounted for
+		segSpaceRem = segSize;
+		// see how much space the segment takes in the head page's space.
+		// subtract the segment address from the beginning of its following page.
+		firstSpaceUsed = ( baseAddress + ((headPage + 1)*PAGESIZE) ) - segAddress;
+		// remove the space used in the segment's first page, from the remaining amount
+		segSpaceRem -= firstSpaceused;
+		// see how much overflow the segment has into a page it doesn't completely fill
+		int remainder =  segSpaceRem % PAGESIZE;
+		// if the remainder is 0, the segment fits perfectly into the end of some page,
+		// meaning it can be evenly divided into a number of pages.
+		if(remainder == 0) {
+			numPages = segSpaceRem / PAGESIZE;
+		}
+		// otherwise, the segment doesn't fit perfectly into its last page. take the
+		// floor of the number of pages, and add one extra for the last chunk.
+		else {
+			numPages = (segSpaceRem / PAGESIZE) + 1;
+		}
+		// run the page-swapping algorithm numPages times, iterating through the
+		// original page spots in memory and iterating through the stored page's
+		// spot in the current thread's list, starting at the stored page.
+		int i, currOrigPage, currStoredPage;
+		my_pthread_t currOrigOwner, currStoredOwner;
+		// get the owner for each thread whose page we're looking at
+		currOrigOwner = PageTable[origPage].owner;
+		storedOwner = PageTable[storedPage].owner;
+		if(storedOwner != current_thread) {
+			exit(EXIT_FAILURE);
+		}
+		currOrigPage = origPage;
+		currStoredPage = storedPage;
+		for(i = 0; i < numPages; i++) {
+			// if the owner of the current original-space thread we're
+			// looking at is the current thread, its space should remain
+			// unprotected. set protectedPage to -1 in the swap call.
 
-		Here we declare/initialize/use variable numPages.
-		Determine the number of pages taken up by the segment in question (including the
-		starting page). To do this, set pageSpaceRem = (baseAddress + ((headPage + 1)*PAGESIZE) - segAddress.
-		This tells us how much space remains in the segment's page. Then we set:
-		int segSpaceRem -= pageSpaceRem. This tells us how much space the segment
-		uses outside of its initial space. Next, we set:
-		int remainder = segSpaceRem % PAGESIZE.
-		If remainder == 0, then we set:
-		int numPages = segSpaceRem / PAGESIZE.
-		Else, we set:
-		int numPages = (segSpaceREM / PAGESIZE) + 1. This rounds up one for the remainder
-		of memory after the segment uses up full pages.
-		So, now we know the number of pages taken up by the segment.
+			// swap the current page in original space we want, and the
+			// current stored page we're at.
+			swapPages(currOrigPage, currStoredPage, -1);
+			// increase origPage by 1.
+			origPage ++;
+			// move storedPage to the next page.
+			storedPage = PageTable[storedPage].next;
+		}
+		// pages have all been swapped successfully, things are where they should be.
+		return;
 
-		Now that we have numPages, we can begin running the above-described algorithm from
-		Case 1 numPages many times, with some modifications.
-			I) The algorithm is run numPages many times. This means that it is run within
-			a for loop starting at i = 0 and condition i < numPages.
-			II) Initial setting: Target A is origPage, Target B is storedPage. 
-				i) On each iteration: Target A = origPage + i, to reflect how far
-				along the actual, "original" memory we've gone. On the other hand,
-				Target B = storedPage + i, to reflect how far along we are along
-				the set of stored data pages. If TargetA == TargetB, that means that
-				the page is already owned by owner_threadB, and we continue without
-				running for that iteration.
-			III) We have to un-protect Target A's page for each iteration, at the beginning.
-			It'll be protected at the end.
-
-		
-		*/
 	}
 	// shouldn't happen
 	else {
 		exit(EXIT_FAILURE);
 	}
 
+}
+
+void swapPages(int pageA, int pageB, int protectedPage) {
+	// get the address of page A
+	char *pageAPtr = baseAddress + (pageA * PAGESIZE);
+	if(protectedPage == pageA) {
+		// unprotect the protected page
+		if(mprotect(pageAPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+			exit(EXIT_FAILURE);
+		}
+	}
+	// get the address of page B
+	char *pageBPtr = baseAddress + (pageB * PAGESIZE);
+	if(protectedPage == pageB) {
+		// unprotect the protected page
+		if(mprotect(pageBPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+			exit(EXIT_FAILURE);
+		}
+	}
+	// copy the data from pageA to bufferPage.
+	memcpy(bufferPage, pageAPtr, PAGESIZE);
+	// copy the data at page B's space, to page A's original space
+	memcpy(pageAPtr, pageBPtr, PAGESIZE);
+	// copy the data in bufferPage, to page B's original space.
+	memcpy(pageBPtr, bufferPage, PAGESIZE);
+	// Our objective is to "delink" pageA and pageB from one another's
+	// owning threads' references, by swapping their places.
+	// Store the previous pages for Target A and B, the current pages we're at in the
+	// iterations, and the pages that follow Target A and B.
+	int prevPageA, prevPageB, currPageA, currPageB;
+	// Store the owners of Target A and B.
+	my_pthread_t owner_threadA, owner_threadB;
+	owner_threadA = PageTable[pageA].owner;
+	owner_threadB = PageTable[pageB].owner;
+	// Set a reference to the previous page of the target, and the actual
+	// target, to the first page.
+	prevPageA = threadNodeList[owner_threadA].firstPage;
+	prevPageB = threadNodeList[owner_threadB].firstPage;
+	currPageA = prevPageA;
+	currPageB = prevPageB;
+	// Iterate through owner of target A until we reach target A.
+	while(currPageA != pageA) {
+		prevPageA = currPageA;
+		currPageA = PageTable[currPageA].nextPage;
+	}
+	nextPageA = PageTable[currPageA].nextPage;
+	// Iterate through owner of target B until we reach target B.
+	while(currPageB != pageB) {
+		prevPageB = currPageB;
+		currPageB = PageTable[currPageB].nextPage;
+	}
+	nextPageB = PageTable[currPageB].nextPage;
+	// if either thread was the first page of their owning thread's
+	// list, then make sure the owner knows its new first page.
+	if(currPageA == pageA) {
+		threadNodeList[owner_threadA].firstPage = currPageB;
+	}
+	if(currPageB == pageB) {
+		threadNodeList[owner_threadB].firstPage = currPageA;
+	}
+	// swap the pages' parentSegments. 
+	// TODO @all: determine if this is necessary/appropriate, or if we
+	// should do it case-by-case. too tired to think. [bruno]
+	char *pageAParentSeg = PageTable[pageA].parentSegment;
+	char *pageBParentSeg = PageTable[pageB].parentSegment;
+	PageTable[pageA].parentSegment = pageBParentSeg;
+	PageTable[pageB].parentSegment = pageAParentSeg;
+	// delink/swap the pages from one another's lists. 
+	// this logic works even if pageA is the first page
+	// in its owner's list, and for pageB as well, because if
+	// we incorrectly set pageA's next page to pageB, that'll
+	// rectify itself on the next line.
+	PageTable[prevPageA].nextPage = currPageB
+	PageTable[pageA].nextPage = nextPageB
+	PageTable[prevPageB].nextPage = currPageA
+	PageTable[pageB].nextPage = nextPageA
+	// swap the pages' owners
+	PageTable[pageA].owner = owner_threadB;
+	PageTable[pageB].owner = owner_threadA;
+	// set the page that wasn't the protected page, to be protected
+	// (if applicable)
+	if(protectedPage == pageA || protectedPage == pageB) {
+		char *protectedPagePtr = baseAddress + (protectedPage * PAGESIZE);
+		if(mprotect(protectedPagePtr, PAGESIZE, PROT_NONE) == -1) {
+				exit(EXIT_FAILURE);
+		}
+	}
+	
+	return;
 }
 
 

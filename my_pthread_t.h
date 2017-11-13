@@ -215,6 +215,11 @@ void VTALRMhandler(int signum);
 occur in our memory manager. */
 void SEGVhandler(int sig, siginfo_t *si, void *unused);
 
+/* This swaps input pages A and B and all of their related metadata/
+references from threads and other pages. protectedPage tells us which
+of the two pages is protected.*/
+void swapPages(int pageA, int pageB, int protectedPage);
+
 /* Returns a pointer to a new tcb instance. */
 tcb *createTcb(my_pthread_t id, ucontext_t context, void *(*function)(void*));
 
