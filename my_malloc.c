@@ -253,7 +253,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		pageIndex = threadNodeList[thread].firstPage;
 		while (pageIndex != -1) {
 			// Index to the first memory address of pageIndex
-			index = GLOBAL + (pageIndex * PAGESIZE)
+			index = pages + (pageIndex * PAGESIZE)
 			// If the address the user wishes to free belongs to this page, then break
 			if (ptr >= index && ptr < (index + PAGESIZE)) {
 				break;
@@ -271,7 +271,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		thread = MAX_NUM_THREADS + 1;
 		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 		index = &myBlock;
-		pagesize = KERNEL;
+		pagesize = kernelSize;
 	}
 	else {
 		printf("Error! Invalid value for req: %d\n", req);
@@ -302,7 +302,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 			int endPageIndex = threadNodeList[thread].firstPage;
 			while (endPageIndex != -1) {
 				// Index to the first memory address of pageIndex
-				char * endIndex = GLOBAL + (endPageIndex * PAGESIZE)
+				char * endIndex = pages + (endPageIndex * PAGESIZE)
 				// If the address the user is searching for belongs to this page, then break
 				if (nextPtr >= endIndex && nextPtr < (endPageIndex + PAGESIZE)) {
 					break;
@@ -326,7 +326,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 	}
 	// This is a kernel space combine, so we don't need to check the spanning of multiple pages
 	else {
-		if ((ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (index + KERNEL)) {
+		if ((ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (index + kernelSize)) {
 			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
 				((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
