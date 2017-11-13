@@ -139,14 +139,23 @@ void* myallocate(int bytes, char * file, int line, int req){
 					//if entire block wasn't needed, set rest to free
 					if(((SegMetadata *)ptr)->size > bytes + sizeof(SegMetadata)){
 						
-						int i = 
-						//ITERATE AMOUNT OF PAGES TO PUT SEGMENT DATA FOR REST OF FREED BLOCK_FREE
-						//nextPtr = ......
-						//SegmentData nextSegment = {}
+						//# of bytes untill end of current page
+                        int bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
+                        int bytesLeft = bytes - bytesTillEnd;
+                        
+                        int iterate = ceil(bytesLeft/PAGESIZE);
+                        
+						// iterate amount of pages necessary to insert SegMegadata
+                        for(i = 0; i < iterate; i++){
+                            pageNum = pageTable[pageNum].nextPage;
+                        }
 						
-						
-						
-						
+						// iterate remainder of bytes
+                        char * nextPtr = baseAddress + (pageNum * PAGESIZE) + (bytesLeft%PAGESIZE);
+                        
+                        // add SegMetadata to set rest of block to free.
+                        SegMetadata segment = {BLOCK_FREE, ((SegMetadata *)ptr)->size - bytes - sizeof(SegMetadata);
+                        *(SegMetadata *)nextPtr = segment;
 						
 					}	
 				}
