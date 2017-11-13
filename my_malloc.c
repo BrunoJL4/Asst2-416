@@ -14,7 +14,7 @@ are initialized to by default*/
 uint manager_active;
 
 /* The global array containing the memory we are "allocating" */
-char * myBlock = (char *)memalign(TOTALMEM, PAGESIZE);
+static char * myBlock;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -53,6 +53,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 	
 	// initialize signal alarm struct
 	memset(&mem_sig, 0, sizeof(mem_sig));
+	
+	
 	//prot_none threads pages
 	
 	
@@ -60,6 +62,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 	if(*myBlock == '\0'){
 		printf("Initializing kernel space in memory.\n");
 
+		myBlock = (char *)memalign(TOTALMEM, PAGESIZE);
+		
 		// create PageMetadata for kernel's block... mark it as BLOCK_USED with kernelSize as size.
 		PageMetadata data = (PageMetadata) { BLOCK_USED, kernelSize }; 
 		// Metadata for kernel is at the beginning of the global block, and will be followed
@@ -113,38 +117,50 @@ void* myallocate(int bytes, char * file, int line, int req){
 	//IF CALLED BY SCHEDULER
 	if(LIBRARYREQ){
 		
+		//TO DO:
 		//USE FREEBYTES VAR TO DETERMINE POINTER ASKED FOR
 		//GLOBAL VARIABLE??
-		//WHAT DID BRUNO SUGGEST EARYLIER?
 		
 	}else{ //IF CALLED BY THREAD
 		
 		//FIND FREE SEGMENT WITHIN THREADS PAGE(S)
-		int pageNum = pagethreadNodeList[thread].firstPage; //threads first page
+		int pageNum = pagethreadNodeList[thread].firstPage; //threads first abstraction page
+		int virtualPageNum = 0; //this the first page that thread is under the illusion of iterating
 		char * ptr = baseAddress + (PAGESIZE * pageNum);
 		while(pageNum != -1){
-		
+			
+			//If this segment has enough space, assign user requested space, set remaining to free, and return
 			if(((SegMetadata *)ptr)->used == BLOCK_FREE){
 				//does block have room for requested bytes
-				//if(((SegMetadata *)ptr)->size > sizeof(SegMetadata) + 1)
-				
-				
-				
-				
-				
-				
-				
-				
+				if(((SegMetadata *)ptr)->size >= bytes)
+					((SegMetadata *)ptr)->used = BLOCK_USED;
+					//if entire block wasn't needed, set rest to free
+					if(((SegMetadata *)ptr)->size > bytes + sizeof(SegMetadata)){
+						
+						//TO DO:
+						//ITERATE AMOUNT OF PAGES TO PUT SEGMENT DATA FOR REST OF FREED BLOCK_FREE
+						//nextPtr = ......
+						//SegmentData nextSegment = {}
+						
+						
+						
+						
+						
+					}	
+				}
 			}
 					
 			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			
-			//DIRTY DIRTY CASE: if chunk leaks off page
-			if(ptr > ptr + PAGESIZE){
-				bytesLeaked = ptr - (pageNum+1*PAGESIZE) - baseAddress; 
+			// leakage or end of block.
+			if(ptr >= ptr + PAGESIZE){
+				pageNum = PageTable[pageNum].nextPage; 
+				virtualPageNum++;
+				bytesLeaked = ptr - (pageNum*PAGESIZE) - baseAddress; 
 				//iterate pageNum depending on how many bytes leaked
 				for(int i = 0; i < ceil(bytesLeaked/PAGESIZE); i++){
 					pageNum = PageTable[pageNum].nextPage;
+					virtualPageNum++;
 				}
 				ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
 			}
@@ -154,34 +170,56 @@ void* myallocate(int bytes, char * file, int line, int req){
 		//CREATE NEW PAGES TO GIVE SEGMENT
 		
 		if(((SegMetadata *)ptr->used == BLOCK_FREE)){
-			
+			//get amouunt of bytes at last block
 		}
-		//IF PTR IS USED START ON NEXT PAGE
-		
-		
-		//SAME AS THREAD 0, BUT 
-		//IF FREE, USED THOSE BYTES AS WELL FOR ALLOCATION
+		//how many pages need to be allocated to handle request?
+		int pagesToAllocate = ceil(bytes/PAGESIZE); //iterate this each page number of times. 
+		//GET THE THREAD THESE PAGES! 
+		if(pageTable[virtualPageNum + 1].used == BLOCK_USED) //virtual page is used by another thread
+			//find free page to swap w/ page
+			for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
+				if(pageTable[i].used == BLOCK_FREE){
+					//found one!
+					//TO DO
+					//SETS MEMBERS OF PAGETABLE AND THREADNODELIST TO PROPER VALUES, 
 
-		//THREAD IS NOT ASSIGNED A PAGE
-		if(threadNodeList[current_thread].firstPage == -1){	
-			if([pageTable[0].used == BLOCK_USED){ //page 0 is used by another thread
-				//find free page to swap w/ page 0
-				for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
-					if(pageTable[i].used == BLOCK_FREE){
-						//found one!
-						
-						//owner of page 0's first page is now i 
-						threadNodeList[pageTable[0].owner].firstPage = i;
-						
-						//page i is used and owned
-						pageTable[i].used = BLOCK_USED;
-						pageTable[i].owner = pageTable[0].owner;
-						
-						//set permissions and reallocate page's contents
-						mprotect(baseAddress, PAGESIZE, PROT_READ);
-						mprotect(baseAddress, PAGESIZE, PROT_WRITE);
-						memcpy(baseAddress, baseAddress + (PAGESIZE * i));
-						mprotect(baseAddress + (PAGESIZE * i), PAGESIZE, PROT_NONE);
+					/*while(pageTable[page].nextPage != virtualPageNum + 1){ //if not, 
+							page = pageTable[page].nextPage;
+						}
+					int page = threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage; 
+					if(page == virtualPageNum + 1){ //is page the threads first page?
+						threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage = i;
+					}else{
+						while(pageTable[page].nextPage != virtualPageNum + 1){ //if not, 
+							page = pageTable[page].nextPage;
+						}
+					}
+					pageTable[page].nextPage = i;
+					pageTable[pageNum].nextPage = virtualPageNum + 1;
+					
+					//owner of threads virtual page is now i 
+					if(virtualPageNum + 1 == 0)
+						threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage = i;
+				
+
+		
+		
+		
+		
+		
+				/** AN OLD IMPLEMENTATON (FIRST PAGE ONLY), USE LOGIC TO COMPLETE ABOVE**/
+					//owner of page 0's first page is now i 
+					threadNodeList[pageTable[0].owner].firstPage = i;
+					
+					//page i is used and owned
+					pageTable[i].used = BLOCK_USED;
+					pageTable[i].owner = pageTable[0].owner;
+					
+					//set permissions and reallocate page's contents
+					mprotect(baseAddress, PAGESIZE, PROT_READ);
+					mprotect(baseAddress, PAGESIZE, PROT_WRITE);
+					memcpy(baseAddress, baseAddress + (PAGESIZE * i));
+					mprotect(baseAddress + (PAGESIZE * i), PAGESIZE, PROT_NONE);
 						
 					}
 				}
@@ -191,10 +229,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			if(threadNodeList[current_thread].firstPage == -1) 
 					return NULL;
 					
-
-			//page 0 is (now) free, so give to curent thread; 
-			threadNodeList[current_thread].firstPage = 0; 
-			pageTable[0].owner = current_thread; 
+			
 		} 
 	}
 }
