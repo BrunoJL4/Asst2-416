@@ -647,8 +647,8 @@ int runQueueHelper() {
 		// TODO @all: if the currPage is out of scope of the user space, we
 		// shouldn't be modifying/changing it (e.g. in a swap file). make
 		// sure for phase C that this logic works.
-		// un-protect all of the current thread's memory pages
-		int currPage = threadNodeList[current_thread].firstPage;
+		// un-protect all of the to-be-run thread's memory pages
+		int currPage = threadNodeList[currId].firstPage;
 		while(currPage != -1) {
 			if(mprotect((baseAddress + (currPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
 				exit(EXIT_FAILURE);
@@ -666,9 +666,9 @@ int runQueueHelper() {
 		// immediately turn itimer off for this thread
 		timer.it_value.tv_sec = 0;
 		timer.it_value.tv_usec = 0;
-		// protect all of the current thread's memory pages (whichever
+		// protect all of the previously-run thread's memory pages (whichever
 		// those may be after the thread ran)
-		currPage = threadNodeList[current_thread].firstPage;
+		currPage = threadNodeList[currId].firstPage;
 		while(currPage != -1) {
 			if(mprotect((baseAddress + (currPage * PAGESIZE)), PAGESIZE, PROT_NONE) == -1) {
 				exit(EXIT_FAILURE);
