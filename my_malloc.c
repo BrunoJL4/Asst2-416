@@ -49,8 +49,11 @@ char * freeKernelPtr;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
-	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
 	
+    sigprocmask(SIG_BLOCK, SIGVALRM, NULL);
+    
+    printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
+    
 	// INITIALIZE SIGNAL ALARM STRUCT
 	memset(&mem_sig, 0, sizeof(mem_sig));
 	
@@ -257,6 +260,8 @@ void* myallocate(int bytes, char * file, int line, int req){
         int remainingBytes = (bytes - bytesTillEnd) % PAGESIZE;
         char * nextPtr = baseAddress + (virtualPageNum * PAGESIZE) + remainingBytes;
         *(Segment *)nextPtr = segment;
+    
+        sigprocmask(SIG_UNBLOCK, SIGVALRM, NULL);
     
         //RETURN POINTER TO BLOCK
         return (void *)(ptr + sizeof(SegMetadata));
