@@ -13,6 +13,20 @@ plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
 #include <signal.h>
 
+/* Global variables. */
+
+/* Will be accessed by scheduler for moving files around in
+SIGSEGV handler. */
+extern char *myBlock;
+/* Will be accessed by scheduler for figuring out page ownership
+by thread, in SIGSEGV handler. */
+extern ThreadMetadata *threadNodeList;
+/* Will be accessed by scheduler for page bookeeping, in
+SIGSEGV handler. */
+extern PageMetadata *PageTable;
+/* Also accessed by the SIGSEGV handler. */
+extern char *baseAddress;
+
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */
 #define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
@@ -21,8 +35,6 @@ they can be accessed by other libraries. */
 #define THREADREQ 0 //User called
 #define LIBRARYREQ 1 //Library called
 #define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
-
-typedef uint my_pthread_t;
 
 /* Enum declarations: */
 enum blockStatus {
@@ -53,7 +65,7 @@ typedef struct PageNode {
 	/* Number of the next page's data for the owning thread. -1 by default.*/
 	int nextPage;
 
-	/* Thread ID of the the thread owning this page. -1 by default.  */
+	/* Thread ID of the the thread owning this page. MAX_NUM_THREADS+1 by default.  */
 	my_pthread_t owner;
 
 	/* The address of the segment that floods into this page. NULL by default, or
@@ -73,7 +85,7 @@ typedef struct SegNode {
 	/* Size of the data allocation this segment has. */
 	unsigned int size;
 	/* Address of previous SegMetadata */
-	struct SegNode *prev;
+	SegMetadata *prev;
 } SegMetadata;
 
 /* Thread Node
@@ -92,25 +104,11 @@ typedef struct ThreadNode {
 	or -1 (for a thread with no memory allocated yet)*/
 	int firstPage;
 
-	/* Memory allocated so far for this thread. Used in operations involving both
+	/* Pages left so far for this thread. Used in operations involving both
 	page shuffling and determining victims for the Swap File. */
-	int memoryAllocated;
+	int pagesLeft;
 } ThreadMetadata;
 
-
-/* Global variables. */
-
-/* Will be accessed by scheduler for moving files around in
-SIGSEGV handler. */
-extern char *myBlock;
-/* Will be accessed by scheduler for figuring out page ownership
-by thread, in SIGSEGV handler. */
-extern ThreadMetadata *threadNodeList;
-/* Will be accessed by scheduler for page bookeeping, in
-SIGSEGV handler. */
-extern PageMetadata *PageTable;
-/* Also accessed by the SIGSEGV handler. */
-extern char *baseAddress;
 
 
 /* Function Declarations: */
