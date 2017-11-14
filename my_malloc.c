@@ -123,7 +123,7 @@ void* myallocate(int bytes, char * file, int line, int req){
         //store start to requested block
         char * ret = freeKernelPtr;
         //point to next free block
-        freeKernelPtr + bytes;
+        freeKernelPtr += bytes;
         
         return (void *)ret;
 

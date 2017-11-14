@@ -24,6 +24,8 @@ extern ThreadMetadata *threadNodeList;
 /* Will be accessed by scheduler for page bookeeping, in
 SIGSEGV handler. */
 extern PageMetadata *PageTable;
+/* Also accessed by the SIGSEGV handler. */
+extern char *baseAddress;
 
 
 /* Constants used in mymalloc.c will be declared here, so that
