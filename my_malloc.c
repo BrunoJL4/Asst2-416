@@ -139,21 +139,22 @@ void* myallocate(int bytes, char * file, int line, int req){
 		char *ptr = baseAddress + (PAGESIZE * pageNum);
 		// go check through the thread's list of currently-held pages, for an open segment
 		// of sufficient size
-		while(pageNum != -1){
+		while(pageNum != -1) {
 			if(((SegMetadata *)ptr)->used == BLOCK_FREE){
 				// check if the segment has sufficient room for the request
-				if(((SegMetadata *)ptr)->size >= bytes)
+				if(((SegMetadata *)ptr)->size >= bytes) {
 					((SegMetadata *)ptr)->used = BLOCK_USED;
 					// if the segment's size is greater than the user's allocation, plus
 					// leaving room over for a SegMetadata struct
 					if(((SegMetadata *)ptr)->size > bytes + sizeof(SegMetadata)){
 						
-						//# of bytes until end of current page
+						// # of bytes until end of the page the segment begins in
+						// TODO @bruno: fix this arithmetic
                         int bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
+                        // # of bytes left to be allocated after the initial page???
                         int bytesLeft = bytes - bytesTillEnd;
-                        
+                        // number of pages to iterate through
                         int iterate = ceil(bytesLeft/PAGESIZE);
-                        
 						// iterate amount of pages necessary to insert SegMegadata
                         for(i = 0; i < iterate; i++){
                             pageNum = pageTable[pageNum].nextPage;
@@ -162,33 +163,34 @@ void* myallocate(int bytes, char * file, int line, int req){
 						// iterate remainder of bytes
                         char * nextPtr = baseAddress + (pageNum * PAGESIZE) + (bytesLeft%PAGESIZE);
                         
-                        // add SegMetadata to set rest of block to free.
+                        // add SegMetadata for the rest of the free space.
                         SegMetadata segment = {BLOCK_FREE, ((SegMetadata *)ptr)->size - bytes - sizeof(SegMetadata)};
                         *(SegMetadata *)nextPtr = segment;
                         
-                        //return pointer to start of block
+                        //return pointer to start of returned block
                         return (void *)(ptr + sizeof(SegMetadata));
 						
-					}	
-				}
-					
+					}
+				}	
+			}
+
 			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			
-			// leakage or end of block.
-			if(ptr >= ptr + PAGESIZE){
-				pageNum = PageTable[pageNum].nextPage; 
-				virtualPageNum++;
-				bytesLeaked = ptr - (pageNum*PAGESIZE) - baseAddress; 
-				//iterate pageNum depending on how many bytes leaked
+			// if ptr has left the current block of stored data that we're iterating through
+			if(ptr >= baseAddress + ((pageNum + 1) * PAGESIZE)) {
+				int bytesLeaked = ptr - (baseAddress + ((pageNum + 1) * PAGESIZE)); 
+				// iterate pageNum however far we need to go to get to the next segment
 				for(int i = 0; i < ceil(bytesLeaked/PAGESIZE); i++){
 					pageNum = PageTable[pageNum].nextPage;
 					virtualPageNum++;
+					if(pageNum == -1) {
+						break;
+					}
 				}
-				ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
+				// ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
 			}
 		}
-
-        virtualPageNum++; //thread is under illusion that we are allocating next contiguous page
+		//thread is under illusion that we are allocating next contiguous page
         int bytesTillEnd = 0;
 		if(((SegMetadata *)ptr->used == BLOCK_FREE)){
 			bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
