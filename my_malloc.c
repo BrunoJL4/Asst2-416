@@ -251,17 +251,12 @@ void* myallocate(int bytes, char * file, int line, int req){
         SegMetadata segment = { BLOCK_FREE, PAGESIZE - remainingBytes - sizeof(SegMetadata) };
         int remainingBytes = (bytes - bytesTillEnd) % PAGESIZE;
         char * nextPtr = baseAddress + (virtualPageNum * PAGESIZE) + remainingBytes;
-        *(Segment *)nextPtr = segment;
+        *(SegMetadata *)nextPtr = segment;
     
         sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
     
         //RETURN POINTER TO BLOCK
         return (void *)(ptr + sizeof(SegMetadata));
-    
-					
-			
-		} 
-	}
 }
 
 /** Smart Free **/
@@ -413,7 +408,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 				
 				// IF there are pages being freed, then change the size of the segment
 				if (numPages > 0) {
-					((SegMetadata *)ptr->size = (sizeof(SegMetadata) + ptr) - (index + PAGESIZE);
+					(SegMetadata *)ptr->size = (sizeof(SegMetadata) + ptr) - (index + PAGESIZE);
 				}
 			}
 			
@@ -422,7 +417,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 			// IF pages will be freed, create new segment at start of last page
 			if (numPages > 0 && remainder > sizeof(SegMetadata)) {
 				SegMetadata newSeg = { BLOCK_FREE, remainder - sizeof(SegMetadata), prev };
-				((SegMetadata *)index = newSeg;
+				(SegMetadata *)index = newSeg;
 			// IF there is not enough space for the new segment, combine it to prev
 			} else if (numPages > 0) {
 				((SegMetadata *)prev)->size += remainder;

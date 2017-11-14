@@ -27,7 +27,6 @@ extern PageMetadata *PageTable;
 /* Also accessed by the SIGSEGV handler. */
 extern char *baseAddress;
 
-
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */
 #define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
@@ -98,7 +97,7 @@ typedef struct ThreadNode {
 	/* Page # of the thread's first allocated page. If Thread A allocates pages 0
 	and 1, and Thread B's context swaps in and allocates pages 0 and 1, then Thread A's
 	firstPage points to wherever its data for page 0 was. If it was swapped to
-	Page 2, then threadA.firstPage will be 2. Similarly, PageTable[threadA.firstPage].next
+	Page 2, then threadA.firstPage will be 2. Similarly, PageTable[threadA.firstPage].nextPage
 	will be 3 if Thread A's data for page 1 was swapped to page 3.
 
 	This value should be a signed int, since its value can be -2 (for the kernel)
