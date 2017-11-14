@@ -269,6 +269,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 
 /** Smart Free **/
 void mydeallocate(void * ptr, char * file, int line, int req){
+	sigprocmask(SIG_BLOCK, SIGVALRM, NULL);
+	
 	int thread;
 	int pageIndex
 	char * index;
@@ -286,7 +288,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 		pageIndex = threadNodeList[thread].firstPage;
 		while (pageIndex != -1) {
 			// Index to the first memory address of pageIndex
-			index = pages + (pageIndex * PAGESIZE)
+			index = baseAddress + (pageIndex * PAGESIZE)
 			// If the address the user wishes to free belongs to this page, then break
 			if (ptr >= index && ptr < (index + PAGESIZE)) {
 				break;
@@ -335,7 +337,7 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 			int endPageIndex = threadNodeList[thread].firstPage;
 			while (endPageIndex != -1) {
 				// Index to the first memory address of pageIndex
-				char * endIndex = pages + (endPageIndex * PAGESIZE)
+				char * endIndex = baseAddress + (endPageIndex * PAGESIZE)
 				// If the address the user is searching for belongs to this page, then break
 				if (nextPtr >= endIndex && nextPtr < (endPageIndex + PAGESIZE)) {
 					break;
@@ -460,6 +462,8 @@ void mydeallocate(void * ptr, char * file, int line, int req){
 			}
 		}
 	}
+	
+	sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 	
 	return;
 

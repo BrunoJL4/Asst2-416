@@ -11,6 +11,7 @@
 /* Including my_pthread_t.h for basic libraries we already used,
 plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
+#include <signal.h>
 
 /* Global variables. */
 
