@@ -46,7 +46,7 @@ char * freeKernelPtr;
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
 	
-    sigprocmask(SIG_BLOCK, SIGVALRM, NULL);
+    sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
     
     printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
 	
@@ -253,7 +253,7 @@ void* myallocate(int bytes, char * file, int line, int req){
         char * nextPtr = baseAddress + (virtualPageNum * PAGESIZE) + remainingBytes;
         *(Segment *)nextPtr = segment;
     
-        sigprocmask(SIG_UNBLOCK, SIGVALRM, NULL);
+        sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
     
         //RETURN POINTER TO BLOCK
         return (void *)(ptr + sizeof(SegMetadata));
@@ -266,7 +266,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 
 /** Smart Free **/
 void mydeallocate(void * ptr, char * file, int line, int req){
-	sigprocmask(SIG_BLOCK, SIGVALRM, NULL);
+	sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
 	
 	int thread;
 	int pageIndex
