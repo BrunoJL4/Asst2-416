@@ -53,10 +53,6 @@ void* myallocate(int bytes, char * file, int line, int req){
     sigprocmask(SIG_BLOCK, SIGVALRM, NULL);
     
     printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
-    
-	// INITIALIZE SIGNAL ALARM STRUCT
-	memset(&mem_sig, 0, sizeof(mem_sig));
-	
 	
 	// SET THREAD'S PAGES TO PROT_WRITE/READ
     int page;
