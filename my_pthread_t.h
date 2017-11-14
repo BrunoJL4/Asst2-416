@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <sys/mman.h>
 #include "my_malloc.h"
 
 typedef uint my_pthread_t;

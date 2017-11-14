@@ -737,7 +737,7 @@ that isn't its own.
 */
 void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// address of the first page that was protected
-	char *requestAddr = (char *) si->address;
+	char *requestAddr = (char *) si->si_addr;
 	// address of the buffer page
 	char *bufferPage = &myBlock + sizeof(myBlock) - PAGESIZE;
 	// Exit if the seg fault is a result of accessing space outside the user space
@@ -752,7 +752,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	my_pthread_t origOwner, storedOwner;
 	// Determine what original page the user's request is in. To do this,
 	// get value (requestAddr - baseAddress)/PAGESIZE. Call this origPage.
-	origPage = (requestAddr - baseAddr)/PAGESIZE;
+	origPage = (requestAddr - baseAddress)/PAGESIZE;
 	// Set my_pthread_t origOwner = PageTable[origPage].owner.
 	origOwner = PageTable[origPage].owner;
 	// Get page where the data being requested by the user is actually stored.
@@ -786,7 +786,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	caseNum = -1;
 	// Calculate a value storedAddr, which gives the address of the relative offset
 	// within the stored page, that requestedAddr would have had for the original page.
-	char *storedAddr = ((requestedAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress
+	char *storedAddr = ((requestAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress;
 	// Cases 1 and 2 (requested page does NOT have parent segment):
 	if(PageTable[storedPage].parentSegment == NULL) {
 		segHead = storedAddr;
@@ -796,11 +796,11 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		// Set headPage to storedPage.
 		headPage = storedPage;
 		// Figure out if the segment overflows into other pages.
-		int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
-		int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+		int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata);
+		int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1;
 		// if lastSpace <= lastPageSpace, then the segment is contained within the
 		// requested page. Set case to 1.
-		if(lastSpace <= lastPageSpace) {
+		if(lastSegSpace <= lastPageSpace) {
 			caseNum = 1;
 		}
 		// else, the segment is NOT contained within the requested page. Set case
@@ -817,7 +817,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// a prior segment's data overflow. 
 	else{ 
 		// First, determine how far along the segment's original location was in the user space.
-		headPage = ((PageTable[storedPage].parentSegment) - baseAddr)/PAGESIZE
+		headPage = ((PageTable[storedPage].parentSegment) - baseAddress)/PAGESIZE;
 		// Un-protect the original headPage (or it'll retain R/W permissions if it's already unprotected)
 		if(mprotect((baseAddress + (headPage * PAGESIZE)), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
 			exit(EXIT_FAILURE);
@@ -826,18 +826,18 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		// headPage points to the original page in memory where the parent segment was
 		// allocated. we use headPage to determine how far along the requesting thread's
 		// page list we need to go to find the actual location of the stored segment right now.
-		segHead = baseAddress + (headPage * PAGESIZE) + ((PageTable[storedPage].parentSegment - baseAddr) % PAGESIZE)
+		segHead = baseAddress + (headPage * PAGESIZE) + ((PageTable[storedPage].parentSegment - baseAddress) % PAGESIZE);
 		// Get the size of the segment.
-		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size.
+		segSize = ((SegMetadata *) segHead - sizeof(SegMetadata))->size;
 		// If segHead == requestedAddr, then we have either case 1 or 2 (segment starts
 		// in the requested page), except the page itself has overflow from another segment.
 		// Handle it identically.
-		if(segHead == requestedAddr) {
-			int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata).
-			int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1.
+		if(segHead == requestAddr) {
+			int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata);
+			int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1;
 			// if lastSpace <= lastPageSpace, then the segment is contained within the
 			// requested page. Set case to 1.
-			if(lastSpace <= lastPageSpace) {
+			if(lastSegSpace <= lastPageSpace) {
 				caseNum = 1;
 			}
 			// else, set case to 2.
@@ -864,7 +864,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	If the segment in question is contained within the page, we only swap one page around.
 	*/
 	if(caseNum == 1) {
-		swapPages(origPage, storedPage);
+		swapPages(origPage, storedPage, origPage);
 		return;
 	}
 	/* Case 2
