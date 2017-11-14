@@ -9,10 +9,6 @@
 
 /* Define global variables here. */
 
-/* Boolean 1 if manager thread is active, otherwise 0 as globals
-are initialized to by default*/
-uint manager_active;
-
 /* The global array containing the memory we are "allocating" */
 static char * myBlock;
 
