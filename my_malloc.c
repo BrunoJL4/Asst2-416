@@ -154,8 +154,11 @@ void* myallocate(int bytes, char * file, int line, int req){
                         char * nextPtr = baseAddress + (pageNum * PAGESIZE) + (bytesLeft%PAGESIZE);
                         
                         // add SegMetadata to set rest of block to free.
-                        SegMetadata segment = {BLOCK_FREE, ((SegMetadata *)ptr)->size - bytes - sizeof(SegMetadata);
+                        SegMetadata segment = {BLOCK_FREE, ((SegMetadata *)ptr)->size - bytes - sizeof(SegMetadata)};
                         *(SegMetadata *)nextPtr = segment;
+                        
+                        //return pointer to start of block
+                        return (void *)(ptr + sizeof(SegMetadata));
 						
 					}	
 				}
@@ -176,69 +179,88 @@ void* myallocate(int bytes, char * file, int line, int req){
 				ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
 			}
 		}
-		
-		//FREE SEGMENT WAS NOT AVAILABLE WITHIN THREADS PAGE(S)
-		//CREATE NEW PAGES TO GIVE SEGMENT
-		
+
+        virtualPageNum++; //thread is under illusion that we are allocating next contiguous page
+        int bytesTillEnd = 0;
 		if(((SegMetadata *)ptr->used == BLOCK_FREE)){
-			//get amouunt of bytes at last block
+			bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
 		}
 		//how many pages need to be allocated to handle request?
-		int pagesToAllocate = ceil(bytes/PAGESIZE); //iterate this each page number of times. 
-		//GET THE THREAD THESE PAGES! 
-		if(pageTable[virtualPageNum + 1].used == BLOCK_USED) //virtual page is used by another thread
-			//find free page to swap w/ page
-			for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
-				if(pageTable[i].used == BLOCK_FREE){
-					//found one!
-					//TO DO
-					//SETS MEMBERS OF PAGETABLE AND THREADNODELIST TO PROPER VALUES, 
+		int pagesToAllocate = ceil((bytes - bytesTillEnd)/PAGESIZE); //iterate this each page number of times.
+        int pagesAllocated = 0;
+    
+        while(pagesAllocated != pagesToAllocate){
+            if(pageTable[virtualPageNum ].used == BLOCK_USED){ //virtual page is used by another thread
+                //find free pages to swap w/ page
+                for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
+                    if(pageTable[i].used == BLOCK_FREE){
+                        //found one!
+                        
+                        //1st: set values in threadNodeList
+                        int threadPage = threadNodeList[pageTable[virtualPageNum].owner].firstPage;
+                        if(threadPage == virtualPageNum){
+                            threadNodeList[pageTable[virtualPageNum].owner].firstPage = i;
+                        }
+                        while(pageTable[threadPage].nextPage != -1){
+                            
+                            if(pageTable[threadPage].nextPage == virtualPageNum){
+                                pageTable[threadPage].nextPage = i;
+                            }
+                            
+                                threadPage = pageTable[threadPage].nextPage;
+                        }
+                    
+                        //2nd: set values in PageTable
+                        pageTable[i].owner = pageTable[virtualPageNum].owner
+                        //pageTable[virtualPageNum].owner = current_thread;
+                        pageTable[i].used = BLOCK_USED;
 
-					/*while(pageTable[page].nextPage != virtualPageNum + 1){ //if not, 
-							page = pageTable[page].nextPage;
-						}
-					int page = threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage; 
-					if(page == virtualPageNum + 1){ //is page the threads first page?
-						threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage = i;
-					}else{
-						while(pageTable[page].nextPage != virtualPageNum + 1){ //if not, 
-							page = pageTable[page].nextPage;
-						}
-					}
-					pageTable[page].nextPage = i;
-					pageTable[pageNum].nextPage = virtualPageNum + 1;
-					
-					//owner of threads virtual page is now i 
-					if(virtualPageNum + 1 == 0)
-						threadNodeList[pageTable[virtualPageNum + 1].owner].firstPage = i;
-				
+                        
+                        //3rd: set permissions and reallocate page's contents
+                        //set virtual page to PROT_READ/WRITE
+                        mprotect(baseAddress + (PAGESIZE * virtualPageNum), PAGESIZE, PROT_READ);
+                        mprotect(baseAddress + (PAGESIZE * virtualPageNum), PAGESIZE, PROT_WRITE);
+                        //switches contents of virtual page to new page
+                        memcpy(baseAddress + (PAGESIZE * virtualPageNum), baseAddress + (PAGESIZE * pageNum), PAGESIZE);
+                        //set moved contents to PROT_NONE
+                        mprotet(baseAddress + (PAGESIZE * pageNum), PAGESIZE, PROT_NONE);
+                        
+                    }
 
-		
-		
-		
-		
-		
-				/** AN OLD IMPLEMENTATON (FIRST PAGE ONLY), USE LOGIC TO COMPLETE ABOVE**/
-					//owner of page 0's first page is now i 
-					threadNodeList[pageTable[0].owner].firstPage = i;
-					
-					//page i is used and owned
-					pageTable[i].used = BLOCK_USED;
-					pageTable[i].owner = pageTable[0].owner;
-					
-					//set permissions and reallocate page's contents
-					mprotect(baseAddress, PAGESIZE, PROT_READ);
-					mprotect(baseAddress, PAGESIZE, PROT_WRITE);
-					memcpy(baseAddress, baseAddress + (PAGESIZE * i));
-					mprotect(baseAddress + (PAGESIZE * i), PAGESIZE, PROT_NONE);
-						
-					}
-				}
-			}
+                }
+            
+            }
+            // code above is the scenario if a block is used,
+            // make it free. if the above code runs and the virtualPage
+            // used member is still BLOCK_USED, there are no free pages
+            if(pageTable[virtualPageNum].used == BLOCK_USED){
+                return NULL; //no free pages were found
+            }
+            
+            //VIRTUAL PAGE IS (NOW) FREE
+            pageTable[virtualPageNum].owner = current_thread;
+            if(virtualPageNum == 0){
+                threadNodeList[current_thread].firstPage = virtualPageNum;
+            }else{
+                pageTable[pageNum].nextPage = virtualPageNum;
+            }
+            //plus one used page values
+            pagesAllocated++;
+            virtualPageNum++;
+        }
 
-			//could not find a free page to give contents of page 0 to
-			if(threadNodeList[current_thread].firstPage == -1) 
-					return NULL;
+        //UPDATE SEGMENT MEMBERS & SET REMAINING OF PAGE TO FREE
+        ((SegMetadata *)ptr)->used = BLOCK_USED;
+        ((SegMetadata *)ptr)->size = bytes;
+    
+        SegMetadata segment = { BLOCK_FREE, PAGESIZE - remainingBytes - sizeof(SegMetadata) };
+        int remainingBytes = (bytes - bytesTillEnd) % PAGESIZE;
+        char * nextPtr = baseAddress + (virtualPageNum * PAGESIZE) + remainingBytes;
+        *(Segment *)nextPtr = segment;
+    
+        //RETURN POINTER TO BLOCK
+        return (void *)(ptr + sizeof(SegMetadata));
+    
 					
 			
 		} 
