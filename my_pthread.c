@@ -728,7 +728,6 @@ void VTALRMhandler(int signum) {
 	swapcontext(&(tcbList[interrupted_thread]->context), &Manager);
 }
 
-// TODO @bruno: make sure baseAddress global is initialized and externalized.
 /* Signal handler for SIGSEGV.
 
 This is the signal handler used in the case that a thread reads memory
@@ -742,11 +741,12 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	char *bufferPage = &myBlock + sizeof(myBlock) - PAGESIZE;
 	// Exit if the seg fault is a result of accessing space outside the user space
 	// (not our problem). 
-	if((requestAddr < baseAddress) || bufferPage - 1) {
+	if((requestAddr < baseAddress) || requestAddr > bufferPage - 1) {
 		exit(EXIT_FAILURE);
+
 	}
-	/* Determining preceding pages for protected and stored pages, and the location
-	of the data for the requested address in the current thread. 
+	/* Determining the page of the thread's request, the page of the actual location
+	of the stored data, and the current owner of the page of the request.
 	*/
 	int origPage, storedPage;
 	my_pthread_t origOwner, storedOwner;
@@ -768,9 +768,9 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	}
 
 	/* Determining which case this read falls into:
-	1. Thread tries to read memory which is contained in one segment. 
+	1. Thread tries to read a segment which is contained in one page. 
 	Requested address is the actual segment.
-	2. Thread tries to read memory which is NOT contained in one segment.
+	2. Thread tries to read a segment which is NOT contained in one page.
 	Operations are performed above to determine where the segment begins. 
 	TODO @all: When implementing Phase C, have all accesses to actual data 
 	(e.g. segHead and segSize ops) consider the possibility of a page in the
@@ -786,7 +786,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	caseNum = -1;
 	// Calculate a value storedAddr, which gives the address of the relative offset
 	// within the stored page, that requestedAddr would have had for the original page.
-	char *storedAddr = ((requestAddr - baseAddress)%PAGESIZE) + (storedPage * PAGESIZE) + baseAddress;
+	char *storedAddr = baseAddress + (storedPage * PAGESIZE) + ((requestAddr - baseAddress)%PAGESIZE);
 	// Cases 1 and 2 (requested page does NOT have parent segment):
 	if(PageTable[storedPage].parentSegment == NULL) {
 		segHead = storedAddr;
@@ -796,11 +796,12 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		// Set headPage to storedPage.
 		headPage = storedPage;
 		// Figure out if the segment overflows into other pages.
-		int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata);
-		int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1;
-		// if lastSpace <= lastPageSpace, then the segment is contained within the
+		int lastSegAddress = segHead + segSize - 1;
+		// The last address of the page that faulted
+		int lastPageAddress = baseAddress + (storedPage * PAGESIZE) + PAGESIZE - 1;
+		// if lastSegAddress <= lastPageAddress, then the segment is contained within the
 		// requested page. Set case to 1.
-		if(lastSegSpace <= lastPageSpace) {
+		if(lastSegAddress <= lastPageAddress) {
 			caseNum = 1;
 		}
 		// else, the segment is NOT contained within the requested page. Set case
@@ -808,7 +809,6 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		else{
 			caseNum = 2;
 		}
-
 	}
 	// Cases 1, 2 (but faulting page has parent segment)
 	// If PageTable[storedPage].parentSegment is NOT NULL, then the request could
@@ -833,11 +833,11 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 		// in the requested page), except the page itself has overflow from another segment.
 		// Handle it identically.
 		if(segHead == requestAddr) {
-			int lastSegSpace = segHead + segSize - 1 + sizeof(SegMetadata);
-			int lastPageSpace = (storedPage * PAGESIZE) + PAGESIZE - 1;
-			// if lastSpace <= lastPageSpace, then the segment is contained within the
+			int lastSegAddress = segHead + segSize - 1 + sizeof(SegMetadata);
+			int lastPageAddress = (storedPage * PAGESIZE) + PAGESIZE - 1;
+			// if lastSpace <= lastPageAddress, then the segment is contained within the
 			// requested page. Set case to 1.
-			if(lastSegSpace <= lastPageSpace) {
+			if(lastSegAddress <= lastPageAddress) {
 				caseNum = 1;
 			}
 			// else, set case to 2.
@@ -864,7 +864,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	If the segment in question is contained within the page, we only swap one page around.
 	*/
 	if(caseNum == 1) {
-		swapPages(origPage, storedPage, origPage);
+		swapPages(origPage, storedPage, current_thread);
 		return;
 	}
 	/* Case 2
@@ -915,7 +915,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 			// swap the current page in original space we want, and the
 			// current stored page we're at.
-			swapPages(currOrigPage, currStoredPage, -1);
+			swapPages(currOrigPage, currStoredPage, current_thread);
 			// increase origPage by 1.
 			origPage ++;
 			// move storedPage to the next page.
@@ -932,6 +932,9 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 }
 
+// TODO @bruno: refactor logic so that third parameter isn't protectedPage,
+// but the calling thread. This logic will pertain to setting
+// protections. Change calls for swapPages here for this as well.
 void swapPages(int pageA, int pageB, int protectedPage) {
 	// get the address of page A
 	char *pageAPtr = baseAddress + (pageA * PAGESIZE);
@@ -990,13 +993,15 @@ void swapPages(int pageA, int pageB, int protectedPage) {
 	if(currPageB == pageB) {
 		threadNodeList[owner_threadB].firstPage = currPageA;
 	}
-	// swap the pages' parentSegments. 
-	// TODO @all: determine if this is necessary/appropriate, or if we
-	// should do it case-by-case. too tired to think. [bruno]
+	// swap the pages' parentSegments and used/free status.
 	char *pageAParentSeg = PageTable[pageA].parentSegment;
 	char *pageBParentSeg = PageTable[pageB].parentSegment;
+	int pageAUsedStatus = PageTable[pageA].used;
+	int pageBUsedStatus = PageTable[pageB].used;
 	PageTable[pageA].parentSegment = pageBParentSeg;
 	PageTable[pageB].parentSegment = pageAParentSeg;
+	PageTable[PageA].used = pageBUsedStatus;
+	PageTable[PageB].used = pageAUsedStatus;
 	// delink/swap the pages from one another's lists. 
 	// this logic works even if pageA is the first page
 	// in its owner's list, and for pageB as well, because if
