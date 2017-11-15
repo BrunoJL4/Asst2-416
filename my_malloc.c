@@ -45,6 +45,10 @@ int numSwapPagesLeft;
 /* Tells us whether or not we are currently running a memory manager function. */
 int manager_active;
 
+/* Global telling us how many pages each thread is allowed, at max. */
+int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
+
+
 /* End global variable declarations. */
 
 /* malloc & free function implementations */
@@ -76,7 +80,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		ThreadMetadata kernelData = {-2, sizeof(threadNodeList)}
 		// Copy kernelData to the kernel's cell in threadNodeList.
 		threadNodeList[MAX_NUM_THREADS] = kernelData;
-		int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 		// Initialize the standard cells for threadNodeList.
 		int i;
 		for(i = 0; i < MAX_NUM_THREADS; i++) {
