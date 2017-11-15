@@ -404,7 +404,10 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	int thread;
 	int pageIndex
 	char *index;
-	int pagesize;	
+	int pagesize;
+	int origPtr;
+	int origSize;
+
 	//Set ptr to point to its SegMetadata
 	ptr = ptr - sizeof(SegMetadata);
 	
@@ -457,8 +460,11 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 4: free the segment */	
 	((SegMetadata *)ptr)->used = BLOCK_FREE;
-	// Should we wipe the memory for this segment? Do it here if so
-	
+	// determine how many pages the user's thread gets back... this might
+	// be off by 1, since i don't incorporate logic to see if the next segment is free
+	// TODO @all: this could be more precise.
+	int segSize = ((SegMetadata *)ptr)->size;
+	threadNodeList[current_thread].pagesLeft += ceil(segSize/PAGESIZE);
 	
 	/* Part 5: Combine segment with next segment if applicable or free */	
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
@@ -535,7 +541,11 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
+					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
+					// increment the number of pages left in global VM
+					numLocalPagesLeft += 1;
+					// protect the current block
 					if( mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE) == -1) {
 						exit(EXIT_FAILURE);
 					}
@@ -550,7 +560,11 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
+					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
+					// increment the number of pages left in global VM
+					numLocalPagesLeft += 1;
+					// protect the current block
 					if( mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE) == -1) {
 						exit(EXIT_FAILURE);
 					}

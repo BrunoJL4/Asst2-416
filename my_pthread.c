@@ -737,7 +737,9 @@ that isn't its own.
 void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 	// TODO @bruno: refactor this for part C when we get to it.
 	// ez pz
-
+	if(mem_manager_active == 1) {
+		exit(EXIT_FAILURE);
+	}
 	// address of the first page that was protected
 	char *requestAddr = (char *) si->si_addr;
 	// address of the buffer page
