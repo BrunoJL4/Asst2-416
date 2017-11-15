@@ -11,8 +11,10 @@
 /* Including my_pthread_t.h for basic libraries we already used,
 plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
-#include <signal.h>
 #include <math.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */

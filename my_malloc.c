@@ -6,6 +6,7 @@
 
 
 #include "my_malloc.h"
+#include <math.h>
 
 /* Define global variables here. */
 
@@ -76,11 +77,13 @@ void* myallocate(int bytes, char * file, int line, int req){
 		
 		maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 
-		myBlock = memalign(PAGESIZE, TOTALMEM);
+		myBlock = (char *) ((long int)memalign(PAGESIZE, TOTALMEM));
 		if(myBlock == NULL) {
 			printf("Error, memalign didn't work.\n");
 			exit(EXIT_FAILURE);
 		}
+
+		myBlock = NULL;
 
 		// threadNodeList is put in the "last" space in the kernel block... each cell stores a struct, so
 		// threadNodeList is set to a pointer with size enough to store all of the ThreadMetadata structs.
