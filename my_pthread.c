@@ -734,21 +734,21 @@ This is the signal handler used in the case that a thread reads memory
 that isn't its own. 
 
 */
-void SEGVhandler(int sig, siginfo_t *si, void *unused) {
+void SEGVhandler(int sig) {
 	// TODO @bruno: refactor this for part C when we get to it.
 	// ez pz
-	if(mem_manager_active == 1) {
+	if(manager_active == 1) {
 		exit(EXIT_FAILURE);
 	}
 	// address of the first page that was protected
-	char *requestAddr = (char *) si->si_addr;
+	//char *requestAddr = (char *) si->si_addr;
 	// address of the buffer page
-	char *bufferPage = &myBlock + sizeof(myBlock) - PAGESIZE;
+	//char *bufferPage = (char*)&myBlock + sizeof(myBlock) - PAGESIZE;
 	// Exit if the seg fault is a result of accessing space outside the user space
 	// (not our problem). 
-	if((requestAddr < baseAddress) || requestAddr > bufferPage - 1) {
-		exit(EXIT_FAILURE);
-	}
+	//if((requestAddr < baseAddress) || requestAddr > bufferPage - 1) {
+	//	exit(EXIT_FAILURE);
+	//}
 	/* Reorder all the pages all sneaky-like. */
 	int VMPage = 0;  // where our page is supposed to be
 	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
@@ -766,6 +766,7 @@ void SEGVhandler(int sig, siginfo_t *si, void *unused) {
 
 // TODO @bruno: let this deal with case where a page is free
 void swapPages(int pageA, int pageB, my_pthread_t curr) {
+	int nextPageA, nextPageB;
 	// if the inputs are the same, leave
 	if(pageA == pageB) {
 		return;
@@ -792,10 +793,10 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
 				exit(EXIT_FAILURE);
 		}
-		freePage = pageB
+		freePage = pageB;
 	}
 	// address of the buffer page
-	char *bufferPage = &myBlock + sizeof(myBlock) - PAGESIZE;
+	char *bufferPage = (char *)&myBlock + sizeof(myBlock) - PAGESIZE;
 	// copy the data from pageA to bufferPage.
 	memcpy(bufferPage, pageAPtr, PAGESIZE);
 	// copy the data at page B's space, to page A's original space
@@ -820,7 +821,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	currPageB = -1; 
 	// If A isn't a free page, iterate through and get the prev/next refs
 	if(freePage != pageA) {
-		prevPageA threadNodeList[owner_threadA].firstPage;
+		prevPageA = threadNodeList[owner_threadA].firstPage;
 		currPageA = prevPageA;
 		// Iterate through owner of target A until we reach target A.
 		while(currPageA != pageA) {
@@ -856,12 +857,12 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	// if pageA isn't free, then its prev/next references
 	// must be set accordingly. same for pageB.
 	if(freePage != pageA) {
-		PageTable[prevPageA].nextPage = pageB
-		PageTable[pageA].nextPage = nextPageB
+		PageTable[prevPageA].nextPage = pageB;
+		PageTable[pageA].nextPage = nextPageB;
 	}
 	if(freePage != pageB) {
-		PageTable[prevPageB].nextPage = pageA
-		PageTable[pageB].nextPage = nextPageA
+		PageTable[prevPageB].nextPage = pageA;
+		PageTable[pageB].nextPage = nextPageA;
 	}
 	// swap the pages' owners
 	PageTable[pageA].owner = owner_threadB;
@@ -869,8 +870,8 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	// swap used/free status
 	int pageAUsedStatus = PageTable[pageA].used;
 	int pageBUsedStatus = PageTable[pageB].used;
-	PageTable[PageA].used = pageBUsedStatus;
-	PageTable[PageB].used = pageAUsedStatus;
+	PageTable[pageA].used = pageBUsedStatus;
+	PageTable[pageB].used = pageAUsedStatus;
 	// set the page protections correspondingly given the
 	// current thread and new page statuses
 	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE) {
@@ -947,8 +948,8 @@ int init_manager_thread() {
 	// initialize the sigaction struct for seg faults
 	memset(&sig_mem, 0, sizeof(sig_mem));
 	// set signal mask so that SEGVhandler() ignores SIGVTALRM
-	sigset_t msegv_handler_mask;
-	sigemptyset(segv_handler_mask);
+	sigset_t segv_handler_mask;
+	sigemptyset(&segv_handler_mask);
 	sigaddset(&segv_handler_mask, SIGVTALRM);
 	sig_mem.sa_mask = segv_handler_mask;
 	// set signal flag so it catches siginfo

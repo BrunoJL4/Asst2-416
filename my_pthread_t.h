@@ -214,12 +214,12 @@ void VTALRMhandler(int signum);
 
 /* This is the signal handler for seg faults, which will intentionally
 occur in our memory manager. */
-void SEGVhandler(int sig, siginfo_t *si, void *unused);
+void SEGVhandler(int sig);
 
 /* This swaps input pages A and B and all of their related metadata/
 references from threads and other pages. protectedPage tells us which
 of the two pages is protected.*/
-void swapPages(int pageA, int pageB, int protectedPage);
+void swapPages(int pageA, int pageB, my_pthread_t curr);
 
 /* Returns a pointer to a new tcb instance. */
 tcb *createTcb(my_pthread_t id, ucontext_t context, void *(*function)(void*));

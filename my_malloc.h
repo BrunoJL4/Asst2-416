@@ -12,6 +12,7 @@
 plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
 #include <signal.h>
+#include <math.h>
 
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */
@@ -21,6 +22,8 @@ they can be accessed by other libraries. */
 #define THREADREQ 0 //User called
 #define LIBRARYREQ 1 //Library called
 #define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
+
+typedef uint my_pthread_t;
 
 /* Enum declarations: */
 enum blockStatus {
@@ -65,7 +68,7 @@ typedef struct SegNode {
 	/* Size of the data allocation this segment has. */
 	unsigned int size;
 	/* Address of previous SegMetadata */
-	SegMetadata *prev;
+	struct SegNode *prev;
 } SegMetadata;
 
 /* Thread Node
