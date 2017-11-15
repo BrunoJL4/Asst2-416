@@ -55,16 +55,6 @@ void* myallocate(int bytes, char * file, int line, int req){
     sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
     
     printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
-	
-	// SET THREAD'S PAGES TO PROT_WRITE/READ.
-	// this shouldn't be necessary though.
-	if(req == THREADREQ) {
-		int page;
-	    for(page = threadNodeList[current_thread].firstPage; page != -1; page = pageTable[page].next){
-	        memprotect(baseAddress + (page * PAGESIZE), PAGESIZE, PROT_READ)
-		    memprotect(baseAddress + (page * PAGESIZE), PAGESIZE, PROT_WRITE)
-	    }
-	}
     
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
 	if(*myBlock == '\0') {
@@ -132,174 +122,226 @@ void* myallocate(int bytes, char * file, int line, int req){
 	}
 	//IF CALLED BY THREAD
 	else if(req == THREADREQ) {
-		/* Part 1: Look for an available free block. */
+		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
-		int reqPages = ceil(bytes/PAGESIZE);
+		int reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
+		// The number of pages in VM
+		int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 		// If the current thread doesn't have a page yet:
-		if(threadNodeList[current_thread].firstPage == NULL) {
-			
-		}
-		// 
-		// point iterator to thread's first allocated page (the actual stored data)
-		int pageNum = pagethreadNodeList[thread].firstPage; 
-		//this the first page that thread is under the illusion of iterating (the original space)
-		int virtualPageNum = 0;
-		// pointer to the head of the current segment we're viewing in memory
-		char *currPtr = baseAddress + (PAGESIZE * pageNum);
-		// pointer to the next, free segment that would follow the current segment
-		char *nextPtr;
-		// go check through the thread's list of currently-held pages, for an open segment
-		// of sufficient size
-		while(pageNum != -1) {
-			if(((SegMetadata *)ptr)->used == BLOCK_FREE){
-				// check if the segment has sufficient room for the request
-				if(((SegMetadata *)ptr)->size >= bytes) {
-					((SegMetadata *)ptr)->used = BLOCK_USED;
-					// if the segment's size is greater than the user's allocation, plus
-					// leaving room over for a SegMetadata struct
-					if(((SegMetadata *)ptr)->size > bytes + sizeof(SegMetadata)){
-						// # of bytes until end of the page the segment begins in
-						// TODO @bruno: fix this arithmetic
-                        int bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
-                        // # of bytes left to be allocated after the initial page???
-                        int bytesLeft = bytes - bytesTillEnd;
-                        // number of pages to iterate through
-                        int iterate = ceil(bytesLeft/PAGESIZE);
-						// iterate amount of pages necessary to insert SegMegadata
-                        for(i = 0; i < iterate; i++){
-                            pageNum = pageTable[pageNum].nextPage;
-                        }
-						// iterate remainder of bytes
-                        char * nextPtr = baseAddress + (pageNum * PAGESIZE) + (bytesLeft%PAGESIZE);
-                        // add SegMetadata for the rest of the free space.
-                        SegMetadata segment = {BLOCK_FREE, ((SegMetadata *)ptr)->size - bytes - sizeof(SegMetadata)};
-                        *(SegMetadata *)nextPtr = segment;
-					}
-				}	
+		if(threadNodeList[current_thread].firstPage == -1) {
+			//TODO @all: this will be a swap file case
+			if (reqPages > numLocalPagesLeft) {
+				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+				return NULL;
 			}
-
-			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
-			
-			// if ptr has left the current block of stored data that we're iterating through
-			if(ptr >= baseAddress + ((pageNum + 1) * PAGESIZE)) {
-				int bytesLeaked = ptr - (baseAddress + ((pageNum + 1) * PAGESIZE)); 
-				// iterate pageNum however far we need to go to get to the next segment
-				for(int i = 0; i < ceil(bytesLeaked/PAGESIZE); i++){
-					pageNum = PageTable[pageNum].nextPage;
-					virtualPageNum++;
-					if(pageNum == -1) {
+			int freePage = 0;
+			while (freePage < threadPages) {
+				if (PageTable[freePage].used == BLOCK_FREE) {
+					break;
+				}
+				freePage++;
+			}
+			// This case shouldn't happen, but we're just being safe =^)
+			if (freePage >= threadPages) {
+				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+				return NULL;
+			}
+			threadNodeList[current_thread].firstPage = freePage;
+			// This next line is done by swapPages
+			PageTable[freePage].used = BLOCK_USED;
+			numLocalPagesLeft--;
+			// Swap pages for first page to be page 0
+			if (freePage != 0) {
+				swapPages(0, freePage, current_thread);
+			}
+			// Give the first page a free segment
+			SegMetadata data = { BLOCK_FREE, (PAGESIZE * reqPages) - sizeof(SegMetadata), NULL }
+			(SegMetadata *)baseAddress = data;
+			// Swap the rest of the pages that will be used into place
+			reqPages--;
+			freePage = 0;
+			int replaceThisPage = 1;
+			while (reqPages > 0) {
+				// We now have to find the other free pages that we can use
+				while (freePage < threadPages) {
+					if (PageTable[freePage].used == BLOCK_FREE) {
 						break;
 					}
+					freePage++;
 				}
-				ptr = baseAddress + (pageNum * PAGESIZE) + (bytesLeaked%PAGESIZE);
+				// This case shouldn't happen, but we're just being safe =^)
+				if (freePage >= threadPages) {
+					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+					return NULL;
+				}
+				// Tack it onto nextPage list
+				PageTable[replaceThisPage - 1].nextPage = freePage;
+				// Swap this page into order
+				if (freePage != replaceThisPage) {
+					swapPages(replaceThisPage, freePage, current_thread);
+				}
+				// Decrement free pages left
+				numLocalPagesLeft--;
+				// Replace the next page
+				replaceThisPage++;
+				reqPages--;
 			}
 		}
-		// Case 2: The 
-		//thread is under illusion that we are allocating next contiguous page
-        int bytesTillEnd = 0;
-		if(((SegMetadata *)ptr->used == BLOCK_FREE)){
-			bytesTillEnd = (baseAddress + (pageNum * PAGESIZE)) - ptr - sizeof(SegMetadata);
+		
+		/* Part 2: Make sure pages are in order */
+		int VMPage = 0;  // where our page is supposed to be
+		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
+		while (ourPage != -1) {
+			// Swap pages into order
+			if (VMPage != ourPage) {
+				swapPages(VMPage, ourPage, current_thread);
+			}
+			VMPage++;
+			ourPage = PageTable[ourPage].nextPage;
 		}
-		//how many pages need to be allocated to handle request?
-		int pagesToAllocate = ceil((bytes - bytesTillEnd)/PAGESIZE); //iterate this each page number of times.
-        int pagesAllocated = 0;
-    
-        while(pagesAllocated != pagesToAllocate){
-            if(pageTable[virtualPageNum ].used == BLOCK_USED){ //virtual page is used by another thread
-                //find free pages to swap w/ page
-                for(int i = 0; i < TOTALMEM / PAGESIZE; i++){
-                    if(pageTable[i].used == BLOCK_FREE){
-                        //found one!
-                        
-                        //1st: set values in threadNodeList
-                        int threadPage = threadNodeList[pageTable[virtualPageNum].owner].firstPage;
-                        if(threadPage == virtualPageNum){
-                            threadNodeList[pageTable[virtualPageNum].owner].firstPage = i;
-                        }
-                        while(pageTable[threadPage].nextPage != -1){
-                            
-                            if(pageTable[threadPage].nextPage == virtualPageNum){
-                                pageTable[threadPage].nextPage = i;
-                            }
-                            
-                                threadPage = pageTable[threadPage].nextPage;
-                        }
-                    
-                        //2nd: set values in PageTable
-                        pageTable[i].owner = pageTable[virtualPageNum].owner
-                        //pageTable[virtualPageNum].owner = current_thread;
-                        pageTable[i].used = BLOCK_USED;
-
-                        
-                        //3rd: set permissions and reallocate page's contents
-                        //set virtual page to PROT_READ/WRITE
-                        mprotect(baseAddress + (PAGESIZE * virtualPageNum), PAGESIZE, PROT_READ);
-                        mprotect(baseAddress + (PAGESIZE * virtualPageNum), PAGESIZE, PROT_WRITE);
-                        //switches contents of virtual page to new page
-                        memcpy(baseAddress + (PAGESIZE * virtualPageNum), baseAddress + (PAGESIZE * pageNum), PAGESIZE);
-                        //set moved contents to PROT_NONE
-                        mprotet(baseAddress + (PAGESIZE * pageNum), PAGESIZE, PROT_NONE);
-                        
-                    }
-
-                }
-            
-            }
-            // code above is the scenario if a block is used,
-            // make it free. if the above code runs and the virtualPage
-            // used member is still BLOCK_USED, there are no free pages
-            if(pageTable[virtualPageNum].used == BLOCK_USED){
-                return NULL; //no free pages were found
-            }
-            
-            //VIRTUAL PAGE IS (NOW) FREE
-            pageTable[virtualPageNum].owner = current_thread;
-            if(virtualPageNum == 0){
-                threadNodeList[current_thread].firstPage = virtualPageNum;
-            }
-            else{
-                pageTable[pageNum].nextPage = virtualPageNum;
-            }
-            //plus one used page values
-            pagesAllocated++;
-            virtualPageNum++;
-        }
-
-        //UPDATE SEGMENT MEMBERS & SET REMAINING OF PAGE TO FREE
-        ((SegMetadata *)ptr)->used = BLOCK_USED;
-        ((SegMetadata *)ptr)->size = bytes;
-    
-        SegMetadata segment = { BLOCK_FREE, PAGESIZE - remainingBytes - sizeof(SegMetadata) };
-        int remainingBytes = (bytes - bytesTillEnd) % PAGESIZE;
-        char * nextPtr = baseAddress + (virtualPageNum * PAGESIZE) + remainingBytes;
-        *(SegMetadata *)nextPtr = segment;
-    
-        sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
-    
-        //RETURN POINTER TO BLOCK
-        return (void *)(ptr + sizeof(SegMetadata));
-    }
-    // invalid req parameter
-    else {
-    	exit(EXIT_FAILURE)
-    }
+		
+		/* Part 3: Iterate for free segments and add pages if needed */
+		char * ptr = baseAddress;
+		char * prev = ptr;
+		while (ptr < (baseAddress + (VMPage * PAGESIZE))) {
+			if (((SegMetadata *)ptr)->used == BLOCK_FREE && ((SegMetadata *)ptr)->size >= bytes) {
+				break;
+			}
+			prev = ptr;
+			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+		}
+		// Check if we found a segment
+		if (ptr >= (baseAddress + (VMPage * PAGESIZE))) {
+			// We didn't have a segment big enough
+			// We need to add more pages
+			// If the prev was free, increase the size of prev
+			if (((SegMetadata *)prev)->used == BLOCK_FREE) {
+				reqPages = ceil((bytes - ((SegMetadata *)prev)->size)/PAGESIZE);
+				((SegMetadata *)prev)->size += reqPages * PAGESIZE;
+				ptr = prev;
+			} 
+			
+			// Check if we can add the number of pages needed
+			if (reqPages > numLocalPagesLeft) {
+				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+				return NULL;
+			}
+			// Tack on pages to the end of nextPage list
+			ourPage = VMPage - 1;
+			int sizeReqPages = reqPages;
+			while (reqPages > 0) {
+				while (VMPage < threadPages) {
+					if (PageTable[VMPage].used == BLOCK_FREE) {
+						break;
+					}
+					VMPage++;
+				}
+				// This shouldn't happen but we're being safe
+				if (VMPage >= threadPages) {
+					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+					return NULL;
+				}
+				PageTable[ourPage].nextPage = VMPage;
+				PageTable[VMPage].used = BLOCK_USED;
+				if ((ourPage + 1) != PageTable[ourPage].nextPage) {
+					swapPages(ourPage + 1, PageTable[ourPage].nextPage, current_thread);
+				}				
+				ourPage = PageTable[ourPage].nextPage;
+				reqPages--;
+			}
+			// Create SegMetadata if we didn't just add memory space to prev
+			if (((SegMetadata *)prev)->used != BLOCK_FREE) {
+				SegMetadata data = { BLOCK_FREE, sizeReqPages * PAGESIZE, prev };
+				(SegMetadata *)ptr = data;
+			}
+		}
+		
+		/* Part 4: If the entire segment is not used, then create free segment after the space used */
+		char * extraSeg = NULL;
+		if (bytes < (((SegMetadata *)ptr)->size - (sizeof(SegMetadata) + 1))) {
+			// Create extra segment that is free
+			int extraSpace = bytes - (((SegMetadata *)ptr)->size - sizeof(SegMetadata));
+			((SegMetadata *)ptr)->size = bytes;
+			extraSeg = ptr + ((SegMetadata *)ptr)->size;
+			SegMetadata data = { BLOCK_FREE, extraSpace, ptr };
+			(SegMetadata *)extraSeg = data;
+			
+			char * nextSeg = extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
+			((SegMetadata *)nextSeg)->prev = extraSeg;
+		}
+		// Set the ptr SegMetadata to used
+		((SegMetadata *)ptr)->used = BLOCK_USED;
+		
+		/* Part 5: Set the parent segment fields for both the extra free space (if any) and the new segment */
+		// Do this for ptr
+		// Find the first child page (may not be applicable) of ptr and the number of pages ptr spans
+		int childPage = ceil((ptr - baseAddress)/PAGESIZE);
+		
+		int memoryBeforPtr = ptr % PAGESIZE
+		int memoryAfterPtr = PAGESIZE - memoryBeforPtr;
+		int memoryOnPage = memoryAfterPtr - sizeof(SegMetadata);
+		int memoryOverflow = ((SegMetadata *)ptr)->size - memoryOnPage;
+		int numChildren = ceil(memoryOverflow / PAGESIZE);
+		
+		while (numChildren > 0) {
+			PageTable[childPage].parentSegment = ptr + sizeof(SegMetadata);
+			childPage++;
+			numChildren--;
+		}
+		
+		// Repeat the logic above for extraSeg if it exists
+		if (extraSeg != NULL) {
+			childPage = ceil((extraSeg - baseAddress)/PAGESIZE);
+		
+			memoryBeforPtr = extraSeg % PAGESIZE
+			memoryAfterPtr = PAGESIZE - memoryBeforPtr;
+			memoryOnPage = memoryAfterPtr - sizeof(SegMetadata);
+			memoryOverflow = ((SegMetadata *)extraSeg)->size - memoryOnPage;
+			numChildren = ceil(memoryOverflow / PAGESIZE);
+			
+			while (numChildren > 0) {
+				PageTable[childPage].parentSegment = extraSeg + sizeof(SegMetadata);
+				childPage++;
+				numChildren--;
+			}
+		}
+		
+		/* Part 6: return pointer to user and end sigprocmask =^) */
+		sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+		return ptr + sizeof(SegMetadata);
 }
 
 /** Smart Free **/
 void mydeallocate(void *ptr, char *file, int line, int req){
 	sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
 	
+	/* Part 1: Make sure pages are in order */
+	int VMPage = 0;  // where our page is supposed to be
+	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
+	while (ourPage != -1) {
+		// Swap pages into order
+		if (VMPage != ourPage) {
+			swapPages(VMPage, ourPage, current_thread);
+		}
+		VMPage++;
+		ourPage = PageTable[ourPage].nextPage;
+	}
+	
+	/* Some declarations*/	
 	int thread;
 	int pageIndex
 	char *index;
-	int pagesize;
+	int pagesize;	
 	//Set ptr to point to its SegMetadata
 	ptr = ptr - sizeof(SegMetadata);
+	
+	
+	/* Part 2: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
 	if(req == THREADREQ) {
 		thread = current_thread;
 		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 	
-		// Find the page of the memory
+		// Find the page of the memory address the user is trying to free
 		pageIndex = threadNodeList[thread].firstPage;
 		while (pageIndex != -1) {
 			// Index to the first memory address of pageIndex
@@ -328,19 +370,24 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		exit(EXIT_FAILURE);
 	}	
 
+	
+	/* Part 3: check for segfault */
 	// If this is not a proper segment (freed or !SegMetadata), then Segfault	
 	if (ptr < &myBlock || ptr >= &myBlock + sizeof(myBlock)) {
-		if (((SegMetadata *)ptr)->used != BLOCK_USED) {
-			fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
-			exit(EXIT_FAILURE);
-		}
+		fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
+		exit(EXIT_FAILURE);
+	}
+	if (((SegMetadata *)ptr)->used != BLOCK_USED) {
+		fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
+		exit(EXIT_FAILURE);
 	}
 	
-	// Set to free
+	/* Part 4: free the segment */	
 	((SegMetadata *)ptr)->used = BLOCK_FREE;
 	// Should we wipe the memory for this segment? Do it here if so
 	
-	// Combine next block if it is free
+	
+	/* Part 5: Combine segment with next segment if applicable or free */	
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
 	if (req == THREADREQ) {
 		// Check if it is in bounds of myBlock
@@ -360,17 +407,13 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				endPageIndex = PageTable[endPageIndex].nextPage;
 			}
 			// If pageIndex is -1, then we have a pagefault
-			if (endPageIndex == -1) {
-				fprintf(stderr, "Pagefault! - File: %s, Line: %d.\n", file, line);
-				exit(EXIT_FAILURE);
-			}
-			// END OF CHECK
-
-			// Confirmed next seg belongs to thread's page, so combine if free
-			if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
-				((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
-				// If we are wiping memory, wipe memory of nextPtr SegMetadata here
-				
+			if (endPageIndex != -1) {
+				// Confirmed next seg belongs to thread's page, so combine if free
+				if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
+					((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
+					// If we are wiping memory, wipe memory of nextPtr SegMetadata here
+					
+				}
 			}
 		}
 	}
@@ -386,6 +429,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		}
 	}
 	
+	/* Part 6: Combine segment with previous segment if free */	
 	// If prev block is free, combine
 	if (((SegMetadata *)ptr)->prev != NULL) {
 		SegMetadata * prevPtr = ((SegMetadata *)ptr)->prev;
@@ -398,82 +442,52 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		}
 	}
 	
-	// TODO @Alex: because segments can be multiple pages long, we could be freeing multiple pages
-	//REMEMBER: change the size of the segment if you don't free the page containing the segment
-	//Also may need to create a new segment for continuing pages
-	
-	// If the Segment is the size of the page AND it is at the start of a page, free the page (ONLY IF THIS IS NOT THE KERNEL)
+
+	/* Part 7: Free unused pages at the end of thread memory */
+	// Only free pages if this is the user space
 	if (req == THREADREQ) {
-		// If this segment is at least the size of a page, check if or how many pages need to be freed
-		if ((((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= pagesize) {
-			// Find out how many pages will need to be freed and the starting pageIndex
-			int numPages;
-			int remainder;
-			SegMetadata * prev;
-			if (ptr == index) {
-				// We will free the first pageIndex
-				// This makes things easy to find how many pages freed
-				remainder = (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) % PAGESIZE;
-				numPages = (((SegMetadata *)ptr)->size + sizeof(SegMetadata) - remainder) / PAGESIZE;
-				prev = ((SegMetadata *)ptr)->prev;
-				
-			} else {
-				// pageIndex will be the next page IF we are freeing
-				pageIndex = PageTable[pageIndex].nextPage;
-				// figure out how much memory leaked over from the previous page segment
-				// treat the nextPage like it was a new segment and do the same thing as the if condition above
-				int overFlow = ptr - (index + PAGESIZE);
-				overFlow = (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) - overFlow;
-				// overFlow is now the size of the segment in the continuing pages
-				remainder = overFlow % PAGESIZE;
-				numPages = (overFlow - remainder) / PAGESIZE;	
-				prev = ptr;
-				
-				// IF there are pages being freed, then change the size of the segment
-				if (numPages > 0) {
-					(SegMetadata *)ptr->size = (sizeof(SegMetadata) + ptr) - (index + PAGESIZE);
+		// find some variables
+		char * nextPtr = ptr + sizeof(SegMetadata) + ((SegMetadata *)ptr)->size;
+		int lastPage = threadNodeList[thread].firstPage;
+		while (PageTable[lastPage].nextPage != -1) {
+			lastPage = PageTable[lastPage].nextPage;
+		}
+		char * outOfBounds = baseAddress + (lastPage * PAGESIZE) + PAGESIZE;
+		// If ptr is the last segment AND If ptr size is greater than or equal to a PAGESIZE, continue
+		if (nextPtr >= outOfBounds && (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= PAGESIZE) {
+			// If ptr is the start of a page, free that page and onward
+			if (ptr % PAGESIZE == 0) {
+				// Remove all nextPage links
+				int indexer = (ptr - baseAddress)/PAGESIZE;
+				int after;
+				while (PageTable[indexer].nextPage != -1) {
+					after = indexer;
+					PageTable[indexer].used = BLOCK_FREE;
+					mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE);
+					indexer = PageTable[indexer].nextPage;
+					PageTable[after].nextPage = -1;
 				}
 			}
-			
-			// index is now the memory address of the last remainder of the segment
-			index += numPages * PAGESIZE;
-			// IF pages will be freed, create new segment at start of last page
-			if (numPages > 0 && remainder > sizeof(SegMetadata)) {
-				SegMetadata newSeg = { BLOCK_FREE, remainder - sizeof(SegMetadata), prev };
-				(SegMetadata *)index = newSeg;
-			// IF there is not enough space for the new segment, combine it to prev
-			} else if (numPages > 0) {
-				((SegMetadata *)prev)->size += remainder;
-			}
-			
-			// Loop through to the end of segment size and set pageIndex to pages you will free
-			while (numPages > 0) {
-				
-				// pagePtr points to the first page owned by a thread
-				// If this is the firstPage owned by a thread, set nextPage to firstPage
-				if (pageIndex == threadNodeList[thread].firstPage) {
-					threadNodeList[thread].firstPage = PageTable[threadNodeList[thread].firstPage].nextPage;
+			// If ptr is not the start of a page, free the pages afterwards and reduce the size of segment
+			else {
+				// Remove all nextPage links
+				int indexer = ceil((ptr - baseAddress)/PAGESIZE);
+				int after;
+				while (PageTable[indexer].nextPage != -1) {
+					after = indexer;
+					PageTable[indexer].used = BLOCK_FREE;
+					mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE);
+					indexer = PageTable[indexer].nextPage;
+					PageTable[after].nextPage = -1;
 				}
-				// If this is not firstPage, remove from LL
-				else {
-					int temp = threadNodeList[thread].firstPage;
-					while (PageTable[temp].nextPage != -1) {
-						if (PageTable[temp].nextPage == pageIndex) {
-							break;
-						}
-						temp = PageTable[temp].nextPage;
-					}
-					if (PageTable[temp].nextPage == -1) {
-						printf("Error on PageTable looping.\n");
-						exit(EXIT_FAILURE);
-					}
-					// This line essentially "frees" the page
-					PageTable[temp].nextPage = PageTable[pageIndex].nextPage;
-				}
-				
-				// increment pageIndex and decrement numPages
-				pageIndex = PageTable[pageIndex].nextPage;
-				numPages--;
+				// Reduce the size of segment
+				int pageOutOfBounds = ceil((ptr - baseAddress)/PAGESIZE);
+				char * lastAddress = baseAddress + (PAGESIZE * pageOutOfBounds) - 1;
+				((SegMetadata *)ptr)->size = lastAddress - (ptr + sizeof(SegMetadata));
+			}	
+			// Special case if this is the first page
+			if (ptr == baseAddress) {			
+				threadNodeList[thread].firstPage = -1;
 			}
 		}
 	}
