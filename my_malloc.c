@@ -45,7 +45,6 @@ int maxThreadPages;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
-	// TODO @all: keep track of ThreadMetadata pages left
 	
 	sigset_t signal;
 	sigemptyset(&signal);
@@ -78,6 +77,10 @@ void* myallocate(int bytes, char * file, int line, int req){
 		maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 
 		myBlock = memalign(PAGESIZE, TOTALMEM);
+		if(myBlock == NULL) {
+			printf("Error, memalign didn't work.\n");
+			exit(EXIT_FAILURE);
+		}
 
 		// threadNodeList is put in the "last" space in the kernel block... each cell stores a struct, so
 		// threadNodeList is set to a pointer with size enough to store all of the ThreadMetadata structs.
@@ -120,6 +123,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		for(i = 0; i < maxThreadPages; i++) {
 			char * currAddress = baseAddress + (i * PAGESIZE);
 			if(mprotect(currAddress, PAGESIZE, PROT_NONE) == -1) {
+				printf("ERROR! mprotect operation didn't work!\n");
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -220,6 +224,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			PageTable[freePage].nextPage = -1;
 			// unprotect the thread's new first page
 			if(mprotect(baseAddress + (freePage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+				printf("ERROR! mprotect operation didn't work!\n");
 				exit(EXIT_FAILURE);
 			}
 			// subtract 1 from the thread's remaining pages
@@ -257,6 +262,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				PageTable[freePage].nextPage = -1;
 				// Unprotect the new page
 				if(mprotect(baseAddress + (freePage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					printf("ERROR! mprotect operation didn't work!\n");
 					exit(EXIT_FAILURE);
 				}
 				// Set the pages left for the thread
@@ -354,6 +360,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				numLocalPagesLeft -= 1;
 				// Unprotect the new, VMPage
 				if(mprotect(baseAddress + (VMPage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					printf("ERROR! mprotect operation didn't work!\n");
 					exit(EXIT_FAILURE);
 				}
 				// if the new VM page we found was one that isn't in its proper place yet,
@@ -562,6 +569,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					numLocalPagesLeft += 1;
 					// protect the current block
 					if( mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE) == -1) {
+						printf("ERROR! mprotect operation didn't work!\n");
 						exit(EXIT_FAILURE);
 					}
 					indexer = PageTable[indexer].nextPage;
@@ -581,6 +589,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					numLocalPagesLeft += 1;
 					// protect the current block
 					if( mprotect(baseAddress + (PAGESIZE * indexer), PAGESIZE, PROT_NONE) == -1) {
+						printf("ERROR! mprotect operation didn't work!\n");
 						exit(EXIT_FAILURE);
 					}
 					indexer = PageTable[indexer].nextPage;
