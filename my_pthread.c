@@ -809,6 +809,8 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	owner_threadB = PageTable[pageB].owner;
 	// Set a reference to the previous page of the target, and the actual
 	// target, to the first page.
+	// TODO @bruno: fix this code for the case where either pageA or
+	// pageB is not owned by anyone (free)
 	prevPageA = threadNodeList[owner_threadA].firstPage;
 	prevPageB = threadNodeList[owner_threadB].firstPage;
 	currPageA = prevPageA;
