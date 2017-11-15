@@ -13,22 +13,6 @@ plus the current_thread variable externalized there*/
 #include "my_pthread_t.h"
 #include <signal.h>
 
-/* Global variables. */
-
-/* Will be accessed by scheduler for moving files around in
-SIGSEGV handler. */
-extern char *myBlock;
-/* Will be accessed by scheduler for figuring out page ownership
-by thread, in SIGSEGV handler. */
-extern ThreadMetadata *threadNodeList;
-/* Will be accessed by scheduler for page bookeeping, in
-SIGSEGV handler. */
-extern PageMetadata *PageTable;
-/* Also accessed by the SIGSEGV handler. */
-extern char *baseAddress;
-/* Tells us whether the memory manager is active */
-extern int memory_manager_active;
-
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */
 #define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
@@ -112,6 +96,23 @@ typedef struct ThreadNode {
 void *myallocate(int size, char *file, int line, int req);
 
 void mydeallocate(void *freeptr, char *file, int line, int req);
+
+
+/* Global variables. */
+
+/* Will be accessed by scheduler for moving files around in
+SIGSEGV handler. */
+extern char *myBlock;
+/* Will be accessed by scheduler for figuring out page ownership
+by thread, in SIGSEGV handler. */
+extern ThreadMetadata *threadNodeList;
+/* Will be accessed by scheduler for page bookeeping, in
+SIGSEGV handler. */
+extern PageMetadata *PageTable;
+/* Also accessed by the SIGSEGV handler. */
+extern char *baseAddress;
+/* Tells us whether the memory manager is active */
+extern int memory_manager_active;
 
 /* Our own functions below */
 
