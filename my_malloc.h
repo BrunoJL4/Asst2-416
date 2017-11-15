@@ -26,6 +26,8 @@ SIGSEGV handler. */
 extern PageMetadata *PageTable;
 /* Also accessed by the SIGSEGV handler. */
 extern char *baseAddress;
+/* Tells us whether the memory manager is active */
+extern int memory_manager_active;
 
 /* Constants used in mymalloc.c will be declared here, so that
 they can be accessed by other libraries. */

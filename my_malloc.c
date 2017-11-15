@@ -37,16 +37,16 @@ kernelSize = ((kernelSize/PAGESIZE) + 16) * PAGESIZE;
 char * baseAddress = myBlock + kernelSize; 
 
 /* Number of pages left in myBlock */
-int numLocalPagesleft;
+int numLocalPagesLeft;
 
 /* Number of pages left in swap file */
 int numSwapPagesLeft;
 
 /* Tells us whether or not we are currently running a memory manager function. */
-int manager_active;
+int memory_manager_active;
 
 /* Global telling us how many pages each thread is allowed, at max. */
-int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
+const int maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 
 
 /* End global variable declarations. */
@@ -58,7 +58,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	// TODO @all: keep track of ThreadMetadata pages left
 	
     sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
-    manager_active = 1;
+    memory_manager_active = 1;
     
     printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
     
@@ -85,7 +85,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		for(i = 0; i < MAX_NUM_THREADS; i++) {
 			// Make new ThreadMetadata struct and copy it to threadNodeList, for
 			// each thread besides the kernel.
-			ThreadMetadata newThreadData = {-1, threadPages};
+			ThreadMetadata newThreadData = {-1, maxThreadPages};
 			threadNodeList[i] = newThreaddata;
 		}
 		// Put PageTable before threadNodeList, allocating enough space for the metadata of remaining
@@ -93,27 +93,27 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// from the address of threadNodeList.
 		// Also, leave that last space at the end free for the swapping/free page, used
 		// in signal handling.
-		numLocalPagesLeft = threadPages;
+		numLocalPagesLeft = maxThreadPages;
 		// swap file should have all pages open to start (16MB divided by 4kb)
 		numSwapPagesLeft = (16000000)/PAGESIZE;
-		PageTable = (PageMetadata *) (threadNodeList - (threadPages * sizeof(PageMetadata)));
+		PageTable = (PageMetadata *) (threadNodeList - (maxThreadPages * sizeof(PageMetadata)));
 		// Go through PageTable and create the structs at each space, initializing their space
 		// to be FREE and having 0 space used.
-		for(i = 0; i < threadPages; i++) {
+		for(i = 0; i < maxThreadPages; i++) {
 			// Make new PageMetadata struct and copy it to PageTable
 			PageMetadata newData = {BLOCK_FREE, -1, MAX_NUM_THREADS+1, NULL};
 			PageTable[i] = newData;
 
 		}
 		// manually protect every page in user space, by default
-		for(i = 0; i < threadPages; i++) {
+		for(i = 0; i < maxThreadPages; i++) {
 			currAddress = baseAddress + (i * PAGESIZE);
 			if(mprotect(currAddress, PAGESIZE, PROT_NONE) == -1) {
 				exit(EXIT_FAILURE);
-		}
+			}
 		}
 		// Increase counter for memory allocated by kernel, now that we've allocated PageTable.
-		PageTable[MAX_NUM_THREADS].memoryAllocated += (threadPages * PAGESIZE)
+		PageTable[MAX_NUM_THREADS].memoryAllocated += (maxThreadPages * PAGESIZE)
 		// get size of the first segment
         int firstSize = PageTable - (&myBlock + sizeof(SegMetadata));
         // set first SegMetadata
@@ -158,7 +158,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		}
         // increase counter for memory allocated by kernel
         PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
-        manager_active = 0;
+        memory_manager_active = 0;
         // unmask interrupts and return the pointer
         sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
         return (void *)ret;
@@ -168,27 +168,34 @@ void* myallocate(int bytes, char * file, int line, int req){
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
 		int reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
-		// The number of pages in VM
-		int threadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
+		// check if we have enough pages left in the thread's space to accomodate
+		// the request (total pages... could still not have a big enough segment,
+		// since pages could be fragmented)
+		if(threadNodeList[current_thread].pagesLeft < reqPages) {
+			memory_manager_active = 0;
+			sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
+			return NULL;
+		}
+		// The number of pages in VM is maxThreadPages
 		// If the current thread doesn't have a page yet:
 		if(threadNodeList[current_thread].firstPage == -1) {
-			//TODO @all: this COULD be a swap file case if all pages allocated
+			//TODO @all: this will be a swap file case if all local pages allocated
 			if (reqPages > numLocalPagesLeft) {
-				manager_active = 0;
+				memory_manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
 			int freePage = 0;
 			// iterate through until we find a free page to store our data
-			while (freePage < threadPages) {
+			while (freePage < maxThreadPages) {
 				if (PageTable[freePage].used == BLOCK_FREE) {
 					break;
 				}
 				freePage++;
 			}
 			// This case shouldn't happen, but we're just being safe =^)
-			if (freePage >= threadPages) {
-				manager_active = 0;
+			if (freePage >= maxThreadPages) {
+				memory_manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
@@ -196,7 +203,17 @@ void* myallocate(int bytes, char * file, int line, int req){
 			threadNodeList[current_thread].firstPage = freePage;
 			// This next line is done by swapPages
 			PageTable[freePage].used = BLOCK_USED;
-			numLocalPagesLeft--;
+			// Set the page's new owner to current thread
+			PageTable[freePage].owner = current_thread;
+			// Set the page's next page to -1 by default
+			PageTable[freePage].nextPage = -1;
+			// unprotect the thread's new first page
+			if(mprotect(baseAddress + (freePage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+				exit(EXIT_FAILURE);
+			}
+			// subtract 1 from the thread's remaining pages
+			threadNodelist[current_thread].pagesLeft -= 1;
+			numLocalPagesLeft -= 1;
 			// Swap pages for first page to be page 0, ownerships swapped
 			// as well if applicable
 			if (freePage != 0) {
@@ -204,29 +221,35 @@ void* myallocate(int bytes, char * file, int line, int req){
 			}
 			// Give the first page a free segment
 			SegMetadata data = { BLOCK_FREE, (PAGESIZE * reqPages) - sizeof(SegMetadata), NULL }
-			// unprotect Page 0
-			if(mprotect(baseAddress, PAGESIZE, PROT_NONE) == -1) {
-				exit(EXIT_FAILURE);
-			}
 			(SegMetadata *)baseAddress = data;
 			// Swap the rest of the pages that will be used into place
-			reqPages--;
+			reqPages -= 1;
 			freePage = 0;
 			int replaceThisPage = 1;
 			while (reqPages > 0) {
 				// We now have to find the other free pages that we can use
-				while (freePage < threadPages) {
+				while (freePage < maxThreadPages) {
 					if (PageTable[freePage].used == BLOCK_FREE) {
 						break;
 					}
 					freePage++;
 				}
 				// This case shouldn't happen, but we're just being safe =^)
-				if (freePage >= threadPages) {
-					manager_active = 0;
+				if (freePage >= maxThreadPages) {
+					memory_manager_active = 0;
 					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 					return NULL;
 				}
+				// Set the new page's attributes
+				PageTable[freePage].used = BLOCK_USED
+				PageTable[freePage].owner = current_thread
+				PageTable[freePage].nextPage = -1
+				// Unprotect the new page
+				if(mprotect(baseAddress + (freePage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+				}
+				// Set the pages left for the thread
+				threadNodeList[current_thread].pagesLeft -= 1;
 				// Tack it onto nextPage list
 				PageTable[replaceThisPage - 1].nextPage = freePage;
 				// Swap this page into order
@@ -234,16 +257,18 @@ void* myallocate(int bytes, char * file, int line, int req){
 					swapPages(replaceThisPage, freePage, current_thread);
 				}
 				// Decrement free pages left
-				numLocalPagesLeft--;
+				numLocalPagesLeft -= 1;
 				// Replace the next page
-				replaceThisPage++;
-				reqPages--;
+				replaceThisPage += 1;
+				reqPages -= 1;
 			}
 		}
 		
 		/* Part 2: Make sure pages are in order */
-		int VMPage = 0;  // where our page is supposed to be
-		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
+		// where our page is supposed to be
+		int VMPage = 0;
+		// where our page actually is
+		int ourPage = threadNodeList[current_thread].firstPage;
 		while (ourPage != -1) {
 			// Swap pages into order
 			if (VMPage != ourPage) {
@@ -252,10 +277,13 @@ void* myallocate(int bytes, char * file, int line, int req){
 			VMPage++;
 			ourPage = PageTable[ourPage].nextPage;
 		}
-		
+		// now VMPage points to the first VM address outside of the current thread's
+		// reach, and ourPage points to -1 
 		/* Part 3: Iterate for free segments and add pages if needed */
 		char * ptr = baseAddress;
 		char * prev = ptr;
+		// find a free segment the thread owns, that is large enough to accomodate the request,
+		// AND get the previous segment to that
 		while (ptr < (baseAddress + (VMPage * PAGESIZE))) {
 			if (((SegMetadata *)ptr)->used == BLOCK_FREE && ((SegMetadata *)ptr)->size >= bytes) {
 				break;
@@ -263,7 +291,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			prev = ptr;
 			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 		}
-		// Check if we found a segment
+		// Check if we didn't find a segment (ptr went out of bounds)
 		if (ptr >= (baseAddress + (VMPage * PAGESIZE))) {
 			// We didn't have a segment big enough
 			// We need to add more pages
@@ -276,33 +304,54 @@ void* myallocate(int bytes, char * file, int line, int req){
 			
 			// Check if we can add the number of pages needed
 			if (reqPages > numLocalPagesLeft) {
-				manager_active = 0;
+				memory_manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
+			// VMPage points to the first page that the thread doesn't actually own.
+			// we set ourPage to be the last page that the thread DOES own.
 			// Tack on pages to the end of nextPage list
 			ourPage = VMPage - 1;
+			// save the total number of requested pages for later, as we decrement
+			// reqPages
 			int sizeReqPages = reqPages;
+			// look for enough pages in virtual memory to satisfy the request
 			while (reqPages > 0) {
-				while (VMPage < threadPages) {
+				while (VMPage < maxThreadPages) {
+					// when we find a free page in VM, break
 					if (PageTable[VMPage].used == BLOCK_FREE) {
 						break;
 					}
+					// if we didn't find a free page in VM, increment
 					VMPage++;
 				}
-				// This shouldn't happen but we're being safe
-				if (VMPage >= threadPages) {
-					manager_active = 0;
+				// If VMPage is out of bounds, we don't have enough memory contiguous
+				// within the thread's own virtual memory for the request
+				if (VMPage >= maxThreadPages) {
+					memory_manager_active = 0;
 					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 					return NULL;
 				}
+				// set the new, VMPage's attributes, and link it to current thread's list
 				PageTable[ourPage].nextPage = VMPage;
+				PageTable[VMPage].owner = current_thread;
+				PageTable[VMPage].nextPage = -1;
 				PageTable[VMPage].used = BLOCK_USED;
+				// decrement the current thread's number of pages
+				threadNodeList[current_thread].pagesLeft -= 1;
+				// decrement number of global pages left
+				numLocalPagesLeft -= 1;
+				// Unprotect the new, VMPage
+				if(mprotect(baseAddress + (VMPage * PAGESIZE), PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+				}
+				// if the new VM page we found was one that isn't in its proper place yet,
+				// we swap it into there (the first address following ourPage)
 				if ((ourPage + 1) != PageTable[ourPage].nextPage) {
 					swapPages(ourPage + 1, PageTable[ourPage].nextPage, current_thread);
 				}				
 				ourPage = PageTable[ourPage].nextPage;
-				reqPages--;
+				reqPages -= 1;
 			}
 			// Create SegMetadata if we didn't just add memory space to prev
 			if (((SegMetadata *)prev)->used != BLOCK_FREE) {
@@ -328,7 +377,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		((SegMetadata *)ptr)->used = BLOCK_USED;
 		
 		/* Part 5: return pointer to user and end sigprocmask =^) */
-		manager_active = 0;
+		memory_manager_active = 0;
 		sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 		return ptr + sizeof(SegMetadata);
 	}
@@ -337,7 +386,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 /** Smart Free **/
 void mydeallocate(void *ptr, char *file, int line, int req){
 	sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
-	manager_active = 1;
+	memory_manager_active = 1;
 	
 	/* Part 1: Make sure pages are in order */
 	int VMPage = 0;  // where our page is supposed to be
@@ -519,7 +568,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			}
 		}
 	}
-	manager_active = 0;
+	memory_manager_active = 0;
 	sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 	
 	return;
