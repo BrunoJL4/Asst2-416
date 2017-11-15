@@ -68,12 +68,6 @@ typedef struct PageNode {
 	/* Thread ID of the the thread owning this page. MAX_NUM_THREADS+1 by default.  */
 	my_pthread_t owner;
 
-	/* The address of the segment that floods into this page. NULL by default, or
-	if there are no segments that have overflowed their data into/through this page. 
-	NOTE: This should always refer to the location of the parent segment, in its
-	ORIGINAL SPOT IN MEMORY. Not its currently-stored location.*/
-	char *parentSegment;
-
 } PageMetadata;  
 
 /*

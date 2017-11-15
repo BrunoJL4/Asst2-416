@@ -45,6 +45,9 @@ int numLocalPagesleft;
 /* Number of pages left in swap file */
 int numSwapPagesLeft;
 
+/* Tells us whether or not we are currently running a memory manager function. */
+int manager_active;
+
 /* End global variable declarations. */
 
 /* malloc & free function implementations */
@@ -53,6 +56,7 @@ int numSwapPagesLeft;
 void* myallocate(int bytes, char * file, int line, int req){
 	
     sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
+    manager_active = 1;
     
     printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
     
@@ -116,6 +120,7 @@ void* myallocate(int bytes, char * file, int line, int req){
         freeKernelPtr += bytes;    
         // increase counter for memory allocated by kernel
         PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
+        manager_active = 0;
         // unmask interrupts and return the pointer
         sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
         return (void *)ret;
@@ -131,6 +136,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		if(threadNodeList[current_thread].firstPage == -1) {
 			//TODO @all: this will be a swap file case
 			if (reqPages > numLocalPagesLeft) {
+				manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
@@ -143,6 +149,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			}
 			// This case shouldn't happen, but we're just being safe =^)
 			if (freePage >= threadPages) {
+				manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
@@ -171,6 +178,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				}
 				// This case shouldn't happen, but we're just being safe =^)
 				if (freePage >= threadPages) {
+					manager_active = 0;
 					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 					return NULL;
 				}
@@ -223,6 +231,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			
 			// Check if we can add the number of pages needed
 			if (reqPages > numLocalPagesLeft) {
+				manager_active = 0;
 				sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 				return NULL;
 			}
@@ -238,6 +247,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				}
 				// This shouldn't happen but we're being safe
 				if (VMPage >= threadPages) {
+					manager_active = 0;
 					sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 					return NULL;
 				}
@@ -272,41 +282,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// Set the ptr SegMetadata to used
 		((SegMetadata *)ptr)->used = BLOCK_USED;
 		
-		/* Part 5: Set the parent segment fields for both the extra free space (if any) and the new segment */
-		// Do this for ptr
-		// Find the first child page (may not be applicable) of ptr and the number of pages ptr spans
-		int childPage = ceil((ptr - baseAddress)/PAGESIZE);
-		
-		int memoryBeforPtr = ptr % PAGESIZE
-		int memoryAfterPtr = PAGESIZE - memoryBeforPtr;
-		int memoryOnPage = memoryAfterPtr - sizeof(SegMetadata);
-		int memoryOverflow = ((SegMetadata *)ptr)->size - memoryOnPage;
-		int numChildren = ceil(memoryOverflow / PAGESIZE);
-		
-		while (numChildren > 0) {
-			PageTable[childPage].parentSegment = ptr + sizeof(SegMetadata);
-			childPage++;
-			numChildren--;
-		}
-		
-		// Repeat the logic above for extraSeg if it exists
-		if (extraSeg != NULL) {
-			childPage = ceil((extraSeg - baseAddress)/PAGESIZE);
-		
-			memoryBeforPtr = extraSeg % PAGESIZE
-			memoryAfterPtr = PAGESIZE - memoryBeforPtr;
-			memoryOnPage = memoryAfterPtr - sizeof(SegMetadata);
-			memoryOverflow = ((SegMetadata *)extraSeg)->size - memoryOnPage;
-			numChildren = ceil(memoryOverflow / PAGESIZE);
-			
-			while (numChildren > 0) {
-				PageTable[childPage].parentSegment = extraSeg + sizeof(SegMetadata);
-				childPage++;
-				numChildren--;
-			}
-		}
-		
-		/* Part 6: return pointer to user and end sigprocmask =^) */
+		/* Part 5: return pointer to user and end sigprocmask =^) */
+		manager_active = 0;
 		sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 		return ptr + sizeof(SegMetadata);
 }
@@ -314,6 +291,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 /** Smart Free **/
 void mydeallocate(void *ptr, char *file, int line, int req){
 	sigprocmask(SIG_BLOCK, SIGVTALRM, NULL);
+	manager_active = 1;
 	
 	/* Part 1: Make sure pages are in order */
 	int VMPage = 0;  // where our page is supposed to be
@@ -491,7 +469,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			}
 		}
 	}
-	
+	manager_active = 0;
 	sigprocmask(SIG_UNBLOCK, SIGVTALRM, NULL);
 	
 	return;
