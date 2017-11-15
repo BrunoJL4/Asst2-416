@@ -10,8 +10,9 @@
 /* Define global variables here. */
 
 /* The global array containing the memory we are "allocating" */
+
 // This is externed
-// static char * myBlock;
+char *myBlock;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -76,7 +77,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		
 		maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 
-		myBlock = (char *)memalign(TOTALMEM, PAGESIZE);
+		myBlock = memalign(PAGESIZE, TOTALMEM);
 
 		// threadNodeList is put in the "last" space in the kernel block... each cell stores a struct, so
 		// threadNodeList is set to a pointer with size enough to store all of the ThreadMetadata structs.
@@ -125,7 +126,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// Increase counter for memory allocated by kernel, now that we've allocated PageTable.
 		//PageTable[MAX_NUM_THREADS].memoryAllocated += (maxThreadPages * PAGESIZE)
 		// get size of the first segment
-		int firstSize = PageTable - (myBlock + sizeof(SegMetadata));
+		int firstSize = (char*) PageTable - (myBlock + sizeof(SegMetadata));
 		// set first SegMetadata
 		SegMetadata data = {BLOCK_FREE, firstSize, NULL};
 
@@ -162,7 +163,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			SegMetadata data = {BLOCK_FREE, oldSegSize - (bytes + sizeof(SegMetadata)), (SegMetadata *)currData};
 			*((SegMetadata *) newData) = data;
 			char *nextData = newData + sizeof(SegMetadata) + ((SegMetadata *)newData)->size;
-			if(nextData < PageTable) {
+			if( (char*) nextData < (char*) PageTable ) {
 				((SegMetadata *)nextData)->prev = (SegMetadata *)newData; 
 			}
 		}
@@ -549,9 +550,9 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		// If ptr is the last segment AND If ptr size is greater than or equal to a PAGESIZE, continue
 		if (nextPtr >= outOfBounds && (((SegMetadata *)ptr)->size + sizeof(SegMetadata)) >= PAGESIZE) {
 			// If ptr is the start of a page, free that page and onward
-			if (ptr % PAGESIZE == 0) {
+			if ( ((long int) ( (char*) ptr)) % PAGESIZE == 0) {
 				// Remove all nextPage links
-				int indexer = (ptr - baseAddress)/PAGESIZE;
+				int indexer = (((long int) ( (char*) ptr)) - ((long int)baseAddress))/PAGESIZE;
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
@@ -570,7 +571,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			// If ptr is not the start of a page, free the pages afterwards and reduce the size of segment
 			else {
 				// Remove all nextPage links
-				int indexer = ceil((ptr - baseAddress)/PAGESIZE);
+				int indexer = ceil( ( ((char*) ptr) - baseAddress) / PAGESIZE);
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
@@ -586,9 +587,9 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					PageTable[after].nextPage = -1;
 				}
 				// Reduce the size of segment
-				int pageOutOfBounds = ceil((ptr - baseAddress)/PAGESIZE);
+				int pageOutOfBounds = ceil( ( (char *)ptr - baseAddress )/PAGESIZE);
 				char * lastAddress = baseAddress + (PAGESIZE * pageOutOfBounds) - 1;
-				((SegMetadata *)ptr)->size = lastAddress - (ptr + sizeof(SegMetadata));
+				((SegMetadata *)ptr)->size = lastAddress - ( ((char *)ptr) + sizeof(SegMetadata) );
 			}	
 			// Special case if this is the first page
 			if (ptr == baseAddress) {			
