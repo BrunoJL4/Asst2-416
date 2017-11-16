@@ -392,12 +392,16 @@ void* myallocate(int bytes, char * file, int line, int req){
 			extraSeg = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			SegMetadata data = { BLOCK_FREE, extraSpace, (SegMetadata *)ptr };
 			*((SegMetadata *)extraSeg) = data;
-			/*
-			// what is nextSeg even for?
-			char * nextSeg = extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
-			// create a struct that's at the head of nextSeg
-			SegMetadata nextData = { BLOCK_FREE, }
-			((SegMetadata *)nextSeg)->prev = (SegMetadata *)extraSeg; */
+			// Check if next is out of bounds
+			if (((char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size) >= char*(myBlock + sizeof(myBlock))) {
+				char * nextSeg = (char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
+				// Check if next belongs to our thread
+				if (PageTable[(((char *)nextSeg - (char *)baseAddress)/PAGESIZE)].owner == current_thread) {
+					// create a struct that's at the head of nextSeg
+					// next seg is the segment after extraSeg. We need to tell nextSeg that its prev has changed
+					((SegMetadata *)nextSeg)->prev = (SegMetadata *)extraSeg;
+				}
+			}
 		}
 		// Set the ptr SegMetadata to used
 		((SegMetadata *)ptr)->used = BLOCK_USED;
