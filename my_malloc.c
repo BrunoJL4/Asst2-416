@@ -6,14 +6,13 @@
 
 
 #include "my_malloc.h"
-#include <math.h>
 
 /* Define global variables here. */
 
 /* The global array containing the memory we are "allocating" */
 
 // This is externed
-char *myBlock;
+char *myBlock = NULL;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -57,7 +56,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
     
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
-	if(*myBlock == '\0') {
+	if(myBlock == NULL) {
 		printf("Initializing kernel space in memory.\n");
 		
 		kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
@@ -73,18 +72,15 @@ void* myallocate(int bytes, char * file, int line, int req){
 		an aligned page	*/
 		kernelSize = ((kernelSize/PAGESIZE) + 16) * PAGESIZE;
 		
-		baseAddress = myBlock + kernelSize; 
-		
 		maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
 
-		myBlock = (char *) ((long int)memalign(PAGESIZE, TOTALMEM));
+		posix_memalign((void**)&myBlock, PAGESIZE, TOTALMEM);
 		if(myBlock == NULL) {
 			printf("Error, memalign didn't work.\n");
 			exit(EXIT_FAILURE);
 		}
 
-		myBlock = NULL;
-
+		baseAddress = myBlock + kernelSize; 
 		// threadNodeList is put in the "last" space in the kernel block... each cell stores a struct, so
 		// threadNodeList is set to a pointer with size enough to store all of the ThreadMetadata structs.
 		// TODO @all: this had MAX_NUM_THREADS + 2 before, but I think it should only be MAX_NUM_THREADS + 1.
@@ -94,7 +90,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// threadNodeList[MAX_NUM_THREADS] is metadata for scheduler/kernel. 
 		// Kernel's ThreadMetadata's first page is set to -2, for default kernel value.
 		// So far, we've only allocated threadNodeList.
-		ThreadMetadata kernelData = {-2, sizeof(threadNodeList)};
+		ThreadMetadata kernelData = {-2, (MAX_NUM_THREADS + 1)*sizeof(ThreadMetadata)};
 		// Copy kernelData to the kernel's cell in threadNodeList.
 		threadNodeList[MAX_NUM_THREADS] = kernelData;
 		// Initialize the standard cells for threadNodeList.
@@ -185,7 +181,10 @@ void* myallocate(int bytes, char * file, int line, int req){
 	else if(req == THREADREQ) {
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
-		int reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
+		double reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
+		if(reqPages == 0) {
+			reqPages = 1;
+		}
 		// check if we have enough pages left in the thread's space to accomodate
 		// the request (total pages... could still not have a big enough segment,
 		// since pages could be fragmented)
@@ -233,6 +232,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// subtract 1 from the thread's remaining pages
 			threadNodeList[current_thread].pagesLeft -= 1;
 			numLocalPagesLeft -= 1;
+			int pagesize = PAGESIZE;
 			// Swap pages for first page to be page 0, ownerships swapped
 			// as well if applicable
 			if (freePage != 0) {
@@ -375,7 +375,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				reqPages -= 1;
 			}
 			// Create SegMetadata if we didn't just add memory space to prev
-			if (((SegMetadata *)prev)->used != BLOCK_FREE) {
+			if (((SegMetadata *)prev)->used == BLOCK_USED) {
 				SegMetadata data = { BLOCK_FREE, sizeReqPages * PAGESIZE, (SegMetadata *)prev };
 				*((SegMetadata *)ptr) = data;
 			}
@@ -384,8 +384,10 @@ void* myallocate(int bytes, char * file, int line, int req){
 		/* Part 4: If the entire segment is not used, then create free segment after the space used */
 		char * extraSeg = NULL;
 		if (bytes < (((SegMetadata *)ptr)->size - (sizeof(SegMetadata) + 1))) {
-			// Create extra segment that is free
-			int extraSpace = bytes - (((SegMetadata *)ptr)->size - sizeof(SegMetadata));
+			// Create extra segment that is free... the extra space (for the new seg) is equal to the size
+			// of the segment, minus the size of the user's allocation, minus the size of another SegMetadata
+			int extraSpace = ((SegMetadata*)ptr)->size - bytes - sizeof(SegMetadata);
+			//int extraSpace = bytes - (((SegMetadata *)ptr)->size - sizeof(SegMetadata));
 			((SegMetadata *)ptr)->size = bytes;
 			extraSeg = ptr + ((SegMetadata *)ptr)->size;
 			SegMetadata data = { BLOCK_FREE, extraSpace, (SegMetadata *)ptr };
