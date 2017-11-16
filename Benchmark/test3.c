@@ -25,7 +25,7 @@ int main(int argc, char **argv){
 	for(i = 0; i < maxVal; i++) {
 		int val = i;
 		int actualVal = ptrArr[i];
-		printf("pointer's value should be %d; value is actually: %d\n", val, *pointer);
+		printf("pointer's value should be %d; value is actually: %d\n", val, ptrArr[i]);
 	}
 	// free ptrArr
 	printf("Attempting to free ptrArr!\n");
