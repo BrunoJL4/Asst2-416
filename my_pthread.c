@@ -746,15 +746,6 @@ void SEGVhandler(int sig) {
 	if(manager_active == 1) {
 		exit(EXIT_FAILURE);
 	}
-	// address of the first page that was protected
-	//char *requestAddr = (char *) si->si_addr;
-	// address of the buffer page
-	//char *bufferPage = (char*)&myBlock + sizeof(myBlock) - PAGESIZE;
-	// Exit if the seg fault is a result of accessing space outside the user space
-	// (not our problem). 
-	//if((requestAddr < baseAddress) || requestAddr > bufferPage - 1) {
-	//	exit(EXIT_FAILURE);
-	//}
 	/* Reorder all the pages all sneaky-like. */
 	int VMPage = 0;  // where our page is supposed to be
 	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
@@ -802,7 +793,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		freePage = pageB;
 	}
 	// address of the buffer page
-	char *bufferPage = (char *)&myBlock + sizeof(myBlock) - PAGESIZE;
+	char *bufferPage = (char *)&myBlock + (TOTALMEM - PAGESIZE);
 	// copy the data from pageA to bufferPage.
 	memcpy(bufferPage, pageAPtr, PAGESIZE);
 	// copy the data at page B's space, to page A's original space
