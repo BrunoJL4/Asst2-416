@@ -393,6 +393,12 @@ int my_pthread_manager() {
 	}
 	// We only reach this point when maintenanceHelper()
 	// has set manager_active to 0. Leave the function.
+	// free MLPQ and tcbList
+	free(MLPQ);
+	free(tcbList);
+	// free myBlock as well??? (can't use our own mydeallocate on
+	// myblock!)
+	//free(myBlock);
 	return 0;
 }
 

@@ -396,7 +396,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			SegMetadata data = { BLOCK_FREE, extraSpace, (SegMetadata *)ptr };
 			*((SegMetadata *)extraSeg) = data;
 			// Check if next is out of bounds
-			if (((char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size) >= (char *)(myBlock + sizeof(myBlock))) {
+			if (((char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size) >= (char *)(myBlock + (TOTALMEM - PAGESIZE) )) {
 				char * nextSeg = (char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
 				// Check if next belongs to our thread
 				if (PageTable[(((char *)nextSeg - (char *)baseAddress)/PAGESIZE)].owner == current_thread) {
@@ -487,7 +487,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 3: check for segfault */
 	// If this is not a proper segment (freed or !SegMetadata), then Segfault	
-	if ((char *)ptr < (char *)myBlock || (char *)ptr >= (char *)myBlock + sizeof(myBlock)) {
+	if ((char *)ptr < (char *)myBlock || (char *)ptr >= (char *)myBlock + (TOTALMEM - PAGESIZE)) {
 		fprintf(stderr, "Segfault! - File: %s, Line: %d.\n", file, line);
 		exit(EXIT_FAILURE);
 	}
@@ -508,7 +508,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
 	if (req == THREADREQ) {
 		// Check if it is in bounds of myBlock
-		if (((char *)ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) > (char *)(myBlock + sizeof(myBlock))) {	
+		if (((char *)ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) > (char *)(myBlock + (TOTALMEM - PAGESIZE))) {	
 			// START OF CHECK
 			// First check if you'll stay in pages belonging to the thread
 			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
