@@ -4,16 +4,112 @@
 #include <pthread.h>
 #include "../my_pthread_t.h"
 
-// Here, we test our ability to perform many small, variable-sized
-// allocations in a single thread (patterned intervals of chars
-// and ints)
+// Here, we test our ability to allocate an enormous integer
+// array (~4MB), then a smaller integer array (~1MB),
+// then free the two of them, then allocate a larger array
+// (~5MB), then allocate a smaller array (~400b), then free
+// them.
 int main(int argc, char **argv){
-	// maxVal is however many allocations we want to test.
-	int maxVal = 100;
+	// the two arrays we'll use at a time
+	int *firstArr;
+	int *secondArr;
+	// the number of integers in each of the two
+	int firstCount = 1000000;
+	int secondCount = 250000;
+	// allocate the arrays
+	firstArr = (int *) malloc(firstCount * sizeof(int));
+	secondArr = (int *) malloc(secondCount * sizeof(int));
+	// populate each of them
+	int i;
+	printf("populating firstArr, first interval!\n");
+	for(i = 0; i < firstCount; i++) {
+		firstArr[i] = i;
+	}
+	printf("populating secondArr, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		printf("Attempting to populate secondArr[%d]\n", i);
+		secondArr[i] = i;
+	}
+	// verify that their values are correct
+	printf("Verifying firstArr populated correctly, first interval!\n");
+	for(i = 0; i < firstCount; i++) {
+		if(firstArr[i] != i) {
+			printf("Error in test4! firstArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	printf("Verifying secondArr populated correctly, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		if(secondArr[i] != i) {
+			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	// free firstArr, then check secondArr
+	printf("Attempting to free firstArr, first interval!\n");
+	free(firstArr);
+	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		if(secondArr[i] != i) {
+			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	printf("Attempted to free secondArr, first interval!\n");
+	free(secondArr);
+	printf("Successfully passed first interval!\n");
 	
-	
-	
-	printf("Finished test 4 successfully!\n");
+	// begin second part of the test, it's basically identical to
+	// the first part but with modified firstCount and secondCount values
+	firstCount = 1250000;
+	secondCount = 100;
+	// allocate the arrays
+	firstArr = (int *) malloc(firstCount * sizeof(int));
+	secondArr = (int *) malloc(secondCount * sizeof(int));
+	// populate each of them
+	printf("populating firstArr, first interval!\n");
+	for(i = 0; i < firstCount; i++) {
+		firstArr[i] = i;
+	}
+	printf("populating secoindArr, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		secondArr[i] = i;
+	}
+	// verify that their values are correct
+	printf("Verifying firstArr populated correctly, first interval!\n");
+	for(i = 0; i < firstCount; i++) {
+		if(firstArr[i] != i) {
+			printf("Error in test4! firstArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	printf("Verifying secondArr populated correctly, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		if(secondArr[i] != i) {
+			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	// free firstArr, then check secondArr
+	printf("Attempting to free firstArr, first interval!\n");
+	free(firstArr);
+	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
+	for(i = 0; i < secondCount; i++) {
+		if(secondArr[i] != i) {
+			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
+			return 0;
+		}
+	}
+	printf("Attempted to free secondArr, first interval!\n");
+	free(secondArr);
+	printf("Successfully passed first interval!\n");
+
+
+
+
+
+
+	printf("Finished test 3 successfully!\n");
 	
 	return 0;
 }

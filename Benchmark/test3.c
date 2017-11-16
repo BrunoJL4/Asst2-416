@@ -11,7 +11,7 @@
 // of type my_pthread_t.
 int main(int argc, char **argv){
 	// maxVal is however many allocations we want to test.
-	int maxVal = 100;
+	int maxVal = 1000;
 	// allocate ptrArr
 	printf("Attempting to allocate ptrArr!\n");
 	int* ptrArr = (int*) malloc(maxVal * sizeof(int));
