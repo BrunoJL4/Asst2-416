@@ -7,6 +7,8 @@
 // Here, we test our ability to allocate an integer array
 // inside of our memory, for a single thread. Then we
 // access all of its values and modify them.
+// After that, we perform a similar test, but for variables
+// of type my_pthread_t.
 int main(int argc, char **argv){
 	// maxVal is however many allocations we want to test.
 	int maxVal = 100;
@@ -30,6 +32,30 @@ int main(int argc, char **argv){
 	// free ptrArr
 	printf("Attempting to free ptrArr!\n");
 	free(ptrArr);
+
+	printf("Test case successfully worked on integer array!\n");
+
+	// repeat the test, but with type my_pthread_t
+
+	// allocate threadArr
+	printf("Attempting to allocate threadArr!\n");
+	pthread_t *threadArr = (pthread_t *) malloc(maxVal * sizeof(pthread_t));
+	// populate threadArr similarly to first example
+	uint j;
+	for(j = 0; j < maxVal; j++) {
+		threadArr[j] = (pthread_t) j;
+	}
+	// print out value of each cell in threadArr, to verify
+	for(j = 0; j < maxVal; j++) {
+		int val = j;
+		int actualVal = threadArr[j];
+		printf("pointer's value should be %d; value is actually: %d\n", val, threadArr[j]);
+	}
+	// free threadArr
+	printf("Attempting to free threadArr!\n");
+	free(threadArr);
+
+	printf("Test case successfully worked on thread array!\n");
 
 	printf("Finished test 3 successfully!\n");
 	
