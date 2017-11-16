@@ -14,8 +14,8 @@ int main(int argc, char **argv){
 	int *firstArr;
 	int *secondArr;
 	// the number of integers in each of the two
-	int firstCount = 1000000;
-	int secondCount = 500000;
+	int firstCount = 2000;
+	int secondCount = 400;
 	// allocate the arrays
 	firstArr = (int *) malloc(firstCount * sizeof(int));
 	secondArr = (int *) malloc(secondCount * sizeof(int));

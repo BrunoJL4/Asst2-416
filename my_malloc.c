@@ -581,6 +581,8 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					after = indexer;
 					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
+					// set the owner to -1
+					PageTable[indexer].owner = -1;
 					// increment the number of pages left in global VM
 					numLocalPagesLeft += 1;
 					// protect the current block
@@ -592,7 +594,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					PageTable[after].nextPage = -1;
 				}
 			}
-			// If ptr is not the start of a page, free the pages afterwards and reduce the size of segment
+			// If ptr is not the start of a page, free the pages afterwards and reduce the size of allocated segment
 			else {
 				// Remove all nextPage links
 				int indexer = ceil( ( ((char*) ptr) - baseAddress) / PAGESIZE);
@@ -601,6 +603,8 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					after = indexer;
 					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
+					// set the owner to -1
+					PageTable[indexer].owner = -1;
 					// increment the number of pages left in global VM
 					numLocalPagesLeft += 1;
 					// protect the current block
