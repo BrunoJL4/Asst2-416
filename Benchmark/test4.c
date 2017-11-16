@@ -15,10 +15,18 @@ int main(int argc, char **argv){
 	int *secondArr;
 	// the number of integers in each of the two
 	int firstCount = 1000000;
-	int secondCount = 250000;
+	int secondCount = 500000;
 	// allocate the arrays
 	firstArr = (int *) malloc(firstCount * sizeof(int));
 	secondArr = (int *) malloc(secondCount * sizeof(int));
+	if(firstArr == NULL) {
+		printf("Error! firstArr allocation didn't work, first interval\n");
+		return 0;
+	}
+	if(secondArr == NULL) {
+		printf("Error! secondArr allocation didn't work, first interval\n");
+		return 0;
+	}
 	// populate each of them
 	int i;
 	printf("populating firstArr, first interval!\n");
@@ -27,7 +35,6 @@ int main(int argc, char **argv){
 	}
 	printf("populating secondArr, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
-		printf("Attempting to populate secondArr[%d]\n", i);
 		secondArr[i] = i;
 	}
 	// verify that their values are correct
@@ -66,6 +73,14 @@ int main(int argc, char **argv){
 	// allocate the arrays
 	firstArr = (int *) malloc(firstCount * sizeof(int));
 	secondArr = (int *) malloc(secondCount * sizeof(int));
+	if(firstArr == NULL) {
+		printf("Error! firstArr allocation didn't work, second interval\n");
+		return 0;
+	}
+	if(secondArr == NULL) {
+		printf("Error! secondArr allocation didn't work, second interval\n");
+		return 0;
+	}
 	// populate each of them
 	printf("populating firstArr, first interval!\n");
 	for(i = 0; i < firstCount; i++) {
