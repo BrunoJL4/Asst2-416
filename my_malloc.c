@@ -139,6 +139,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	
 	// IF CALLED BY SCHEDULER
 	if(req == LIBRARYREQ){
+		printf("Allocating segment for a kernel call.\n");
 		// get the first segment metadata (at the very beginning of myBlock)
 		char *currData = myBlock;
 		// iterate by pointer and size until we find a free segment big enough for
@@ -170,18 +171,20 @@ void* myallocate(int bytes, char * file, int line, int req){
 				((SegMetadata *)nextData)->prev = (SegMetadata *)newData; 
 			}
 		}
-        // increase counter for memory allocated by kernel
-        // PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
-        memory_manager_active = 0;
-        // unmask interrupts and return the pointer
-        sigprocmask(SIG_UNBLOCK, &signal, NULL);
-        return (void *)(currData + sizeof(SegMetadata));
+	        // increase counter for memory allocated by kernel
+	        // PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
+	        memory_manager_active = 0;
+	        // unmask interrupts and return the pointer
+		printf("Allocated %d bytes.\n", bytes);
+	        sigprocmask(SIG_UNBLOCK, &signal, NULL);
+	        return (void *)(currData + sizeof(SegMetadata));
 	}
 	//IF CALLED BY THREAD
 	else if(req == THREADREQ) {
+		printf("Allocating segment for a user thread call.\n");
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
-		int reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
+		int reqPages = ceil(((double)bytes + sizeof(SegMetadata))/PAGESIZE);
 
 		// check if we have enough pages left in the thread's space to accomodate
 		// the request (total pages... could still not have a big enough segment,
@@ -393,7 +396,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			SegMetadata data = { BLOCK_FREE, extraSpace, (SegMetadata *)ptr };
 			*((SegMetadata *)extraSeg) = data;
 			// Check if next is out of bounds
-			if (((char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size) >= char*(myBlock + sizeof(myBlock))) {
+			if (((char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size) >= (char *)(myBlock + sizeof(myBlock))) {
 				char * nextSeg = (char *)extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
 				// Check if next belongs to our thread
 				if (PageTable[(((char *)nextSeg - (char *)baseAddress)/PAGESIZE)].owner == current_thread) {
@@ -408,6 +411,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		
 		/* Part 5: return pointer to user and end sigprocmask =^) */
 		memory_manager_active = 0;
+		printf("Allocated %d bytes.\n", bytes);
 		sigprocmask(SIG_UNBLOCK, &signal, NULL);
 		return ptr + sizeof(SegMetadata);
 	}
@@ -626,10 +630,10 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 }
 
 /** Ceiling function - performs the ceil operation on a rational number**/
-int ceil(double num){
+int ourCeil(double num){
 	// if num % a roundedDown(num) outputes a decimal
 	// higher than 0, round up, else round down and return. 
-	return num%(int)num > 0? (int)num + 1 : (int)num;
+	return num - (int)(num) > 0? (int)(num + 1) : (int)(num);
 	
 }
 
