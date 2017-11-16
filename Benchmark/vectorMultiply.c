@@ -67,8 +67,10 @@ int main(int argc, char **argv) {
 
 	// initialize counter
 	counter = (int*)malloc(thread_num*sizeof(int));
-	for (i = 0; i < thread_num; ++i)
+	for (i = 0; i < thread_num; ++i) {
 		counter[i] = i;
+		printf("counter[i] is: %d\n", counter[i]);
+	}
 
 	// initialize pthread_t
 	thread = (pthread_t*)malloc(thread_num*sizeof(pthread_t));

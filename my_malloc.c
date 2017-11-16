@@ -45,7 +45,7 @@ int maxThreadPages;
 
 /** SMART MALLOC **/
 void* myallocate(int bytes, char * file, int line, int req){
-	
+
 	sigset_t signal;
 	sigemptyset(&signal);
 	sigaddset(&signal, SIGVTALRM);
@@ -388,13 +388,18 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// of the segment, minus the size of the user's allocation, minus the size of another SegMetadata
 			int extraSpace = ((SegMetadata*)ptr)->size - bytes - sizeof(SegMetadata);
 			//int extraSpace = bytes - (((SegMetadata *)ptr)->size - sizeof(SegMetadata));
+			// set the old pointer's size to bytes
 			((SegMetadata *)ptr)->size = bytes;
-			extraSeg = ptr + ((SegMetadata *)ptr)->size;
+			// set the beginning of extraSeg's metadata to be after ptr's allocation
+			extraSeg = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			SegMetadata data = { BLOCK_FREE, extraSpace, (SegMetadata *)ptr };
 			*((SegMetadata *)extraSeg) = data;
-			
+			/*
+			// what is nextSeg even for?
 			char * nextSeg = extraSeg + sizeof(SegMetadata) + ((SegMetadata *)extraSeg)->size;
-			((SegMetadata *)nextSeg)->prev = (SegMetadata *)extraSeg;
+			// create a struct that's at the head of nextSeg
+			SegMetadata nextData = { BLOCK_FREE, }
+			((SegMetadata *)nextSeg)->prev = (SegMetadata *)extraSeg; */
 		}
 		// Set the ptr SegMetadata to used
 		((SegMetadata *)ptr)->used = BLOCK_USED;
