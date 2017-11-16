@@ -181,7 +181,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 	else if(req == THREADREQ) {
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
-		double reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
+		int reqPages = ceil((bytes + sizeof(SegMetadata))/PAGESIZE);
 
 		// check if we have enough pages left in the thread's space to accomodate
 		// the request (total pages... could still not have a big enough segment,
@@ -625,7 +625,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 int ceil(double num){
 	// if num % a roundedDown(num) outputes a decimal
 	// higher than 0, round up, else round down and return. 
-	return num%(int)num > 0? (int)num + 1 : (int)num
+	return num%(int)num > 0? (int)num + 1 : (int)num;
 	
 }
 
