@@ -12,7 +12,7 @@ int main(int argc, char **argv){
 	// keep in mind that we'll be allocating a LOT of memory
 	// per char-allocation once we get to the higher numbers
 	// (100+).
-	int maxVal = 1000;
+	int maxVal = 2000;
 	// store the pointers we allocate in ptrArr. they have
 	// type void* as they will have different types.
 	void* ptrArr[maxVal];
@@ -22,7 +22,6 @@ int main(int argc, char **argv){
 	// for each cell in ptrArr, we allocate a char
 	// if i is a multiple of 3, OR we allocate
 	// an int otherwise.
-//	printf("Setting values in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
 //		printf("On allocation: %d\n", i);
 //		printf("bytesSoFar: %d\n", bytesSoFar);
@@ -31,7 +30,7 @@ int main(int argc, char **argv){
 		if( (i % 3 == 0) && (i != 0)) {
 			int numChars = i;
 			// allocate enough space for the chars
-			bytesSoFar += numChars;
+//			bytesSoFar += numChars;
 			char *pointer = (char*)malloc(numChars * sizeof(char));
 			// read the chars into memory
 			int j;
@@ -45,14 +44,13 @@ int main(int argc, char **argv){
 		else {
 			// allocate enough space for the int
 			int *pointer = (int*)malloc(sizeof(int));
-			bytesSoFar += 4;
+//			bytesSoFar += 4;
 			// set the int to i
 			*pointer = i;
 			// add pointer to ptrArr
 			ptrArr[i] = (void *) pointer; 
 		}
 	}
-//	printf("Verifying values in ptrArr!\n");
 	// go through ptrArr and verify that the values are there as intended
 	for(i = 0; i < maxVal; i++) {
 		// if at a multiple of 3 that isn't 0:
@@ -83,9 +81,7 @@ int main(int argc, char **argv){
 	}
 
 	// free each item in ptrArr
-//	printf("Attempting to free items in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
-	//	printf("freeing ptrArr[%d]\n", i);
 		free(ptrArr[i]);
 	}
 

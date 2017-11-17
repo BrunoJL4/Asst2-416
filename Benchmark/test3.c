@@ -13,49 +13,46 @@ int main(int argc, char **argv){
 	// maxVal is however many allocations we want to test.
 	int maxVal = 1000;
 	// allocate ptrArr
-//	printf("Attempting to allocate ptrArr!\n");
 	int* ptrArr = (int*) malloc(maxVal * sizeof(int));
 	int i;
 	// for each cell in ptrArr, add a pointer to the number of the
 	// allocation it was (starting at 0, going to maxVal - 1).
-//	printf("Setting values in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
 		ptrArr[i] = i; 
 	}
-	// print out the value of each cell in ptrArr, make sure it's correct
-//	printf("Printing out values in ptrArr!\n");
+	// verify the correctness of what's in ptrArr
 	for(i = 0; i < maxVal; i++) {
 		int val = i;
 		int actualVal = ptrArr[i];
-//		printf("pointer's value should be %d; value is actually: %d\n", val, ptrArr[i]);
+		if(val != actualVal) {
+			printf("ERROR in test3.c! For i == %d, val is %d and actualVal is %d\n", i, val, actualVal);
+			return 0;
+		}
 	}
 	// free ptrArr
-//	printf("Attempting to free ptrArr!\n");
 	free(ptrArr);
 
-//	printf("Test case successfully worked on integer array!\n");
 
 	// repeat the test, but with type my_pthread_t
 
 	// allocate threadArr
-//	printf("Attempting to allocate threadArr!\n");
 	pthread_t *threadArr = (pthread_t *) malloc(maxVal * sizeof(pthread_t));
 	// populate threadArr similarly to first example
 	uint j;
 	for(j = 0; j < maxVal; j++) {
 		threadArr[j] = (pthread_t) j;
 	}
-	// print out value of each cell in threadArr, to verify
+	// verify the value of each item in ptrArr
 	for(j = 0; j < maxVal; j++) {
 		int val = j;
 		int actualVal = threadArr[j];
-//		printf("pointer's value should be %d; value is actually: %d\n", val, threadArr[j]);
+		if(val != actualVal) {
+			printf("ERROR in test3.c! For i == %d, val is %d and actualVal is %d\n", i, val, actualVal);
+			return 0;
+		}
 	}
 	// free threadArr
-//	printf("Attempting to free threadArr!\n");
 	free(threadArr);
-
-//	printf("Test case successfully worked on thread array!\n");
 
 	printf("Finished test 3 successfully!\n");
 	
