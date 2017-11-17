@@ -15,6 +15,7 @@ void createAndWriteArr(void * arg){
 	int * arr = (int *)malloc(arrSize * sizeof(int));
 	if(arr == NULL) {
 		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
+		return;
 	}
 	
 	printf("populating arr for thread %d\n", current_thread);

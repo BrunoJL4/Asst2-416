@@ -323,7 +323,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// We need to add more pages
 			// If the prev was free, increase the size of prev
 			if (((SegMetadata *)prev)->used == BLOCK_FREE) {
-				reqPages = ceil((double)(bytes - ((SegMetadata *)prev)->size)/PAGESIZE);
+				reqPages = ceil((((double)bytes) - ((SegMetadata *)prev)->size)/PAGESIZE);
 				if (reqPages <= numLocalPagesLeft) {
 					((SegMetadata *)prev)->size += reqPages * PAGESIZE;
 				}
