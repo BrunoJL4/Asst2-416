@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -w
 
-all:: parallelCal vectorMultiply externalCal test1 test2 test3 test4 test5
+all:: parallelCal vectorMultiply externalCal test1 test2 test3 test4 test5 multitest1
 
 test1:
 	$(CC) $(CFLAGS) -pthread -o test1 test1.c -L ../ -lmy_pthread
@@ -18,6 +18,9 @@ test4:
 test5:
 	$(CC) $(CFLAGS) -pthread -o test5 test5.c -L ../ -lmy_pthread 
 
+multitest1:
+	$(CC) $(CFLAGS) -pthread -o multitest1 multitest1.c -L ../ -lmy_pthread 
+
 parallelCal: 
 	$(CC) $(CFLAGS) -pthread -o parallelCal parallelCal.c -L ../ -lmy_pthread
 
@@ -28,4 +31,4 @@ externalCal:
 	$(CC) $(CFLAGS) -pthread -o externalCal externalCal.c -L ../ -lmy_pthread
 
 clean:
-	rm -rf parallelCal vectorMultiply externalCal test1 test2 test3 test4 test5 *.o ./record/
+	rm -rf parallelCal vectorMultiply externalCal test1 test2 test3 test4 test5 multitest1 *.o ./record/
