@@ -296,7 +296,7 @@ int my_pthread_mutex_lock(my_pthread_mutex_t *mutex) {
 	//NOTE: yield should set this thread status to BLOCKED
 	if (mutex->status == LOCKED) {
 		//Create pnode of current thread
-		pnode *new = myallocate(sizeof(pnode), __FILE__, __LINE__, 0);
+		pnode *new = myallocate(sizeof(pnode), __FILE__, __LINE__, LIBRARYREQ);
 		new->tid = current_thread;
 		new->next = NULL;
 		//start a waitQueue if it is empty
@@ -686,7 +686,7 @@ int runQueueHelper() {
 		if(current_status == THREAD_RUNNING) {
 			currTcb->status = THREAD_DONE;
 			if(current_exited == 0) {
-				//current_thread = tcbList[currId]->tid;
+				current_thread = tcbList[currId]->tid;
 				tcbList[current_thread]->waitingThread = MAX_NUM_THREADS + 2;
 				my_pthread_exit(NULL);
 			}
@@ -752,10 +752,6 @@ void SEGVhandler(int sig) {
 	while (ourPage != -1) {
 		// Swap pages into order
 		if (VMPage != ourPage) {
-			// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
-			if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
-				numSwapPagesLeft++;
-			}
 			swapPages(VMPage, ourPage, current_thread);
 		}
 		VMPage++;
@@ -777,23 +773,10 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		&& (PageTable[pageB].owner != curr && PageTable[pageB].used != BLOCK_USED)) {
 		exit(EXIT_FAILURE);
 	}
-	// either of these pages could be in the swapFile
 	// get the address of page A
-	char * pageAPtr;
-	if (pageA >= maxThreadPages) {
-		pageAPtr = swapFile + ((pageA - maxThreadPages) * PAGESIZE);
-	} 
-	else {
-		pageAPtr = baseAddress + (pageA * PAGESIZE);
-	}
+	char *pageAPtr = baseAddress + (pageA * PAGESIZE);
 	// get the address of page B
-	char * pageBPtr;
-	if (pageB >= maxThreadPages) {
-		pageBPtr = swapFile + ((pageB - maxThreadPages) * PAGESIZE);
-	}
-	else {
-		pageBPtr = baseAddress + (pageB * PAGESIZE);
-	}
+	char *pageBPtr = baseAddress + (pageB * PAGESIZE);
 	// unprotect page A if it's not owned by curr OR if it's free
 	int freePage = -1;
 	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE) {

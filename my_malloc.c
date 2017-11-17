@@ -13,8 +13,6 @@
 
 // This is externed
 char *myBlock = NULL;
-// This is the swapFile
-char *swapFile = NULL;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -39,9 +37,6 @@ int memory_manager_active;
 
 /* Global telling us how many pages each thread is allowed, at max. */
 int maxThreadPages;
-
-/* Global telling us how many pages are in the swapfile */
-int maxSwapPages;
 
 
 /* End global variable declarations. */
@@ -69,7 +64,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			+ (sizeof(pnode *) + sizeof(tcb **)) // MLPQ & tcbList
 			+ (MAX_NUM_THREADS * MEM) // stack allocations for child threads
 			+ ((MAX_NUM_THREADS + 1) * sizeof(ThreadMetadata)) // threadNodeList
-			+ ( (((TOTALMEM + SWAPMEM) / PAGESIZE) + 1) * sizeof(PageMetadata)); // PageTable space, rounded up.
+			+ ( ((TOTALMEM / PAGESIZE) + 1) * sizeof(PageMetadata)); // PageTable space, rounded up.
 			
 		/* Figure out how many pages the kernel needs (floor/round-down), add eight more
 		pages to that, and then multiply that number of pages by PAGESIZE. That is the
@@ -78,7 +73,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		kernelSize = ((kernelSize/PAGESIZE) + 16) * PAGESIZE;
 		
 		maxThreadPages = ((TOTALMEM - kernelSize)/(PAGESIZE)) - 1;
-		maxSwapPages = (SWAPMEM/PAGESIZE);
 
 		posix_memalign((void**)&myBlock, PAGESIZE, TOTALMEM);
 		if(myBlock == NULL) {
@@ -114,11 +108,11 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// in signal handling.
 		numLocalPagesLeft = maxThreadPages;
 		// swap file should have all pages open to start (16MB divided by 4kb)
-		numSwapPagesLeft = maxSwapPages;
-		PageTable = (PageMetadata *) (threadNodeList - ((maxThreadPages + maxSwapPages) * sizeof(PageMetadata)));
+		numSwapPagesLeft = (16000000)/PAGESIZE;
+		PageTable = (PageMetadata *) (threadNodeList - (maxThreadPages * sizeof(PageMetadata)));
 		// Go through PageTable and create the structs at each space, initializing their space
 		// to be FREE and having 0 space used.
-		for(i = 0; i < (maxThreadPages + maxSwapPages); i++) {
+		for(i = 0; i < maxThreadPages; i++) {
 			// Make new PageMetadata struct and copy it to PageTable
 			PageMetadata newData = {BLOCK_FREE, -1, MAX_NUM_THREADS+1};
 			PageTable[i] = newData;
@@ -205,32 +199,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		if(threadNodeList[current_thread].firstPage == -1) {
 			//TODO @all: this will be a swap file case if all local pages allocated
 			if (reqPages > numLocalPagesLeft) {
-				if (reqPages > (numLocalPagesLeft + numSwapPagesLeft)) {
-					// Not enough room
-					memory_manager_active = 0;
-					sigprocmask(SIG_UNBLOCK, &signal, NULL);
-					return NULL;
-				}
-				// There are enough pages left, swap as many free pages as needed into main memory
-				int numToSwap = reqPages - numLocalPagesLeft;
-				int topPage = 0; // Next page to be evicted from main mem // starts 0 because thread does not have a first page
-				int swapPage = maxThreadPages; // Page to be thrown into main mem // Starts at first pageTable page
-				while (numToSwap > 0) {
-					// Move topPage to the next page if it is free. We do not need to evict a free page
-					while (PageTable[topPage].used != BLOCK_USED) {
-						topPage++;
-					}
-					// Move swapPage until we find a free page to swap in
-					while (PageTable[swapPage].used != BLOCK_FREE) {
-						swapPage++;
-					}
-					// At this point we have two candidates to swap
-					swapPages(topPage, swapPage, current_thread);
-					// continue main loop
-					numToSwap--;
-					// one less free page in the swapFile
-					numSwapPagesLeft--;
-				}
+				memory_manager_active = 0;
+				sigprocmask(SIG_UNBLOCK, &signal, NULL);
+				return NULL;
 			}
 			int freePage = 0;
 			// iterate through until we find a free page to store our data
@@ -318,13 +289,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		int VMPage = 0;
 		// where our page actually is
 		int ourPage = threadNodeList[current_thread].firstPage;
-		while (ourPage != -1 && VMPage < maxThreadPages) {
+		while (ourPage != -1) {
 			// Swap pages into order
 			if (VMPage != ourPage) {
-				// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
-				if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
-					numSwapPagesLeft++;
-				}
 				swapPages(VMPage, ourPage, current_thread);
 			}
 			VMPage++;
@@ -351,39 +318,15 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// If the prev was free, increase the size of prev
 			if (((SegMetadata *)prev)->used == BLOCK_FREE) {
 				reqPages = ceil((double)(bytes - ((SegMetadata *)prev)->size)/PAGESIZE);
-				//TODO @all: We shouldn't be setting this size for prev until we know we can allocate the reqPages pages!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				((SegMetadata *)prev)->size += reqPages * PAGESIZE;
 				ptr = prev;
 			} 
 			
 			// Check if we can add the number of pages needed
 			if (reqPages > numLocalPagesLeft) {
-				if (reqPages > (numLocalPagesLeft + numSwapPagesLeft)) {
-					// Not enough room
-					memory_manager_active = 0;
-					sigprocmask(SIG_UNBLOCK, &signal, NULL);
-					return NULL;
-				}
-				// There are enough pages left, swap as many free pages as needed into main memory
-				int numToSwap = reqPages - numLocalPagesLeft;
-				int topPage = maxThreadPages - threadNodeList[current_thread].pagesLeft; // Next page to be evicted from main mem
-				int swapPage = maxThreadPages; // Page to be thrown into main mem // Starts at first pageTable page
-				while (numToSwap > 0) {
-					// Move topPage to the next page if it is free. We do not need to evict a free page
-					while (PageTable[topPage].used != BLOCK_USED) {
-						topPage++;
-					}
-					// Move swapPage until we find a free page to swap in
-					while (PageTable[swapPage].used != BLOCK_FREE) {
-						swapPage++;
-					}
-					// At this point we have two candidates to swap
-					swapPages(topPage, swapPage, current_thread);
-					// continue main loop
-					numToSwap--;
-					// one less free page in the swapFile
-					numSwapPagesLeft--;
-				}
+				memory_manager_active = 0;
+				sigprocmask(SIG_UNBLOCK, &signal, NULL);
+				return NULL;
 			}
 			// VMPage points to the first page that the thread doesn't actually own.
 			// we set ourPage to be the last page that the thread DOES own.
@@ -484,22 +427,20 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	sigprocmask(SIG_BLOCK, &signal, NULL);
 	memory_manager_active = 1;
 	
-	/* Part 1: Make sure pages are in order */
+	/* Part 1: Make sure pages are in order , IF it's a user request */
 	int VMPage = 0;  // where our page is supposed to be
-	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
-	while (ourPage != -1) {
+	if(req == THREADREQ) {
+		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
+		while (ourPage != -1) {
 		// Swap pages into order
 		if (VMPage != ourPage) {
-			// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
-			if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
-				numSwapPagesLeft++;
-			}
 			swapPages(VMPage, ourPage, current_thread);
 		}
 		VMPage++;
 		ourPage = PageTable[ourPage].nextPage;
 	}
 	
+	}
 	/* Some declarations*/	
 	int thread;
 	int pageIndex;
@@ -536,7 +477,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		pagesize = PAGESIZE;
 	}	
 	else if(req == LIBRARYREQ) {
-		thread = MAX_NUM_THREADS + 1;
+		thread = MAX_NUM_THREADS;
 		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 		index = myBlock;
 		pagesize = kernelSize;
@@ -564,7 +505,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	// be off by 1, since i don't incorporate logic to see if the next segment is free
 	// TODO @all: this could be more precise.
 	int segSize = ((SegMetadata *)ptr)->size;
-	threadNodeList[current_thread].pagesLeft += ceil(segSize/PAGESIZE);
+	threadNodeList[thread].pagesLeft += ceil(segSize/PAGESIZE);
 	
 	/* Part 5: Combine segment with next segment if applicable or free */	
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
