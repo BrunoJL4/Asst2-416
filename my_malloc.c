@@ -60,7 +60,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 //		printf("Initializing kernel space in memory.\n");
 		
 		kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
-			+ (MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
+			+ (2 * MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
 			+ (sizeof(pnode *) + sizeof(tcb **)) // MLPQ & tcbList
 			+ (MAX_NUM_THREADS * MEM) // stack allocations for child threads
 			+ ((MAX_NUM_THREADS + 1) * sizeof(ThreadMetadata)) // threadNodeList
@@ -145,12 +145,18 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// get the first segment metadata (at the very beginning of myBlock)
 		char *currData = myBlock;
 		// iterate by pointer and size until we find a free segment big enough for
-		// the allocation
-		while(currData < baseAddress) {
+		// the allocation... don't go up to or past PageTable
+		while(currData < (char*)PageTable) {
 			if(((SegMetadata *)currData)->used == BLOCK_FREE && ((SegMetadata *)currData)->size >= bytes) {
 				break;
 			}
 			currData += ((SegMetadata *)currData)->size + sizeof(SegMetadata);
+		}
+		// this shouldn't happen
+		if(currData >= (char*) PageTable) {
+			printf("ERROR! Trying to allocate data for the scheduler past PageTable's space.\n");
+			sigprocmask(SIG_UNBLOCK, &signal, NULL);
+			return NULL;
 		}
 		// save that free segment's size, change the attribute to match bytes
 		int oldSegSize = ((SegMetadata *)currData)->size;
@@ -161,11 +167,12 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// don't change currData's prev, because that's already correct
 		// if there's enough leftover space for the allocation, a NEW
 		// segment's metadata, AND at least one byte, create the new segment
-		if(oldSegSize > bytes + sizeof(SegMetadata)) {
+		if(oldSegSize > bytes + sizeof(SegMetadata) + 1) {
 			// create a new SegMetadata following that, which goes from
 			// the following/next free address to the address of PageTable
 			// in regards to size 
 			char *newData = currData + sizeof(SegMetadata) + ((SegMetadata *)currData)->size;
+			// size of the next segment will be oldSegSize - bytes - sizeof(SegMetadata)
 			SegMetadata data = {BLOCK_FREE, oldSegSize - (bytes + sizeof(SegMetadata)), (SegMetadata *)currData};
 			*((SegMetadata *) newData) = data;
 			char *nextData = newData + sizeof(SegMetadata) + ((SegMetadata *)newData)->size;
@@ -318,7 +325,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 		}
 		// Check if we didn't find a segment (ptr went out of bounds)
-		if (ptr >= (baseAddress + (VMPage * PAGESIZE))) {
+		if ( (ptr != baseAddress) && (ptr >= (baseAddress + (VMPage * PAGESIZE))) ) {
 			// We didn't have a segment big enough
 			// We need to add more pages
 			// If the prev was free, increase the size of prev
