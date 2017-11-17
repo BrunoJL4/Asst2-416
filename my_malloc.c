@@ -213,7 +213,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				}
 				// There are enough pages left, swap as many free pages as needed into main memory
 				int numToSwap = reqPages - numLocalPagesLeft;
-				int topPage = maxThreadPages - threadNodeList[current_thread].pagesLeft; // Next page to be evicted from main mem
+				int topPage = 0; // Next page to be evicted from main mem // starts 0 because thread does not have a first page
 				int swapPage = maxThreadPages; // Page to be thrown into main mem // Starts at first pageTable page
 				while (numToSwap > 0) {
 					// Move topPage to the next page if it is free. We do not need to evict a free page
