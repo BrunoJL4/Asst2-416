@@ -193,6 +193,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// since pages could be fragmented)
 		if(threadNodeList[current_thread].pagesLeft < reqPages) {
 			memory_manager_active = 0;
+			printf("ERROR in my_allocate! thread %d doesn't have enough pages left!\n", current_thread);
 			sigprocmask(SIG_UNBLOCK, &signal, NULL);
 			return NULL;
 		}
@@ -202,6 +203,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			//TODO @all: this will be a swap file case if all local pages allocated
 			if (reqPages > numLocalPagesLeft) {
 				memory_manager_active = 0;
+				printf("ERROR in my_allocate! thread %d can't get enough pages in virtual memory!\n", current_thread);
 				sigprocmask(SIG_UNBLOCK, &signal, NULL);
 				return NULL;
 			}
@@ -216,6 +218,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// This case shouldn't happen, but we're just being safe =^)
 			if (freePage >= maxThreadPages) {
 				memory_manager_active = 0;
+				printf("ERROR in my_allocate! freePage >= maxThreadPages, 1!\n", current_thread);
 				sigprocmask(SIG_UNBLOCK, &signal, NULL);
 				return NULL;
 			}
@@ -258,6 +261,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				// This case shouldn't happen, but we're just being safe =^)
 				if (freePage >= maxThreadPages) {
 					memory_manager_active = 0;
+					printf("ERROR in my_allocate! thread %d freePage >= maxThreadPages, 2!\n", current_thread);
 					sigprocmask(SIG_UNBLOCK, &signal, NULL);
 					return NULL;
 				}
@@ -327,6 +331,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// Check if we can add the number of pages needed
 			if (reqPages > numLocalPagesLeft) {
 				memory_manager_active = 0;
+				printf("ERROR in my_allocate! thread %d reqPages > numLocalPagesLeft!\n", current_thread);
 				sigprocmask(SIG_UNBLOCK, &signal, NULL);
 				return NULL;
 			}
@@ -351,6 +356,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				// within the thread's own virtual memory for the request
 				if (VMPage >= maxThreadPages) {
 					memory_manager_active = 0;
+					printf("ERROR in my_allocate! thread %d VMPage >= maxThreadPages, not enough contiguous memory!\n", current_thread);
 					sigprocmask(SIG_UNBLOCK, &signal, NULL);
 					return NULL;
 				}

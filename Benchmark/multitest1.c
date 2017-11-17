@@ -13,6 +13,9 @@ void createAndWriteArr(void * arg){
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
 	int * arr = (int *)malloc(arrSize * sizeof(int));
+	if(arr == NULL) {
+		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
+	}
 	
 	printf("populating arr for thread %d\n", current_thread);
 	// Populate arr
@@ -34,9 +37,6 @@ void createAndWriteArr(void * arg){
 	
 	printf("freeing arr for thread %d\n", current_thread);
 	free(arr);
-	
-	
-	
 	return;
 }
 
@@ -53,11 +53,15 @@ int main(int argc, char **argv){
 	
 	// Create child threads
 	int i;
+	printf("main() creating threads!\n");
 	for(i = 0; i < numberOfThreads; i++){		
 		if((my_pthread_create(&threadPointers[i], NULL, &createAndWriteArr, NULL)) == -1){
 			printf("Failed to create thread %d\n", i);
 		}
-		printf("finished creating thread %d\n", i);
+	}
+	printf("main() joining threads!\n");
+	for(i = 0; i < numberOfThreads; i++) {
+		my_pthread_join(threadPointers[i], NULL);
 	}
 	
 	printf("Finished Multithreading Test 1 successfully!\n");
