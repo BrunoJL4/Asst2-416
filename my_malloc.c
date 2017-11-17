@@ -193,7 +193,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// since pages could be fragmented)
 		if(threadNodeList[current_thread].pagesLeft < reqPages) {
 			memory_manager_active = 0;
-			printf("ERROR in my_allocate! thread %d doesn't have enough pages left!\n", current_thread);
+			printf("Thread %d is not allowed to allocate more pages!\n", current_thread);
 			sigprocmask(SIG_UNBLOCK, &signal, NULL);
 			return NULL;
 		}
@@ -203,7 +203,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			//TODO @all: this will be a swap file case if all local pages allocated
 			if (reqPages > numLocalPagesLeft) {
 				memory_manager_active = 0;
-				printf("ERROR in my_allocate! thread %d can't get enough pages in virtual memory!\n", current_thread);
+				printf("Thread %d can't get enough pages in virtual memory! Requested %d pages.\n", current_thread, reqPages);
 				sigprocmask(SIG_UNBLOCK, &signal, NULL);
 				return NULL;
 			}
@@ -324,14 +324,17 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// If the prev was free, increase the size of prev
 			if (((SegMetadata *)prev)->used == BLOCK_FREE) {
 				reqPages = ceil((double)(bytes - ((SegMetadata *)prev)->size)/PAGESIZE);
-				((SegMetadata *)prev)->size += reqPages * PAGESIZE;
+				if (reqPages <= numLocalPagesLeft) {
+					((SegMetadata *)prev)->size += reqPages * PAGESIZE;
+				}
 				ptr = prev;
 			} 
+			// Don't need to say else for assigning reqPages because it was determined earlier
 			
 			// Check if we can add the number of pages needed
 			if (reqPages > numLocalPagesLeft) {
 				memory_manager_active = 0;
-				printf("ERROR in my_allocate! thread %d reqPages > numLocalPagesLeft!\n", current_thread);
+				printf("Thread %d reqPages > numLocalPagesLeft! Requested %d pages.\n", current_thread, reqPages);
 				sigprocmask(SIG_UNBLOCK, &signal, NULL);
 				return NULL;
 			}
