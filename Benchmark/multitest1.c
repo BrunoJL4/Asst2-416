@@ -12,7 +12,7 @@ void createAndWriteArr(void * arg){
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
-	int * arr = (int *)malloc(arrSize * sizeof(int));
+	pthread_t * arr = (pthread_t *)malloc(arrSize * sizeof(pthread_t));
 	if(arr == NULL) {
 		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
 		return;
@@ -30,7 +30,7 @@ void createAndWriteArr(void * arg){
 	printf("verifying arr for thread %d\n", current_thread);
 	// Verify arr has the same bytes we wrote into it. 
 	for(i = 0; i < arrSize; i++){
-		if(arr[i] != i){
+		if(arr[i] != current_thread){
 			printf("Verification failed, thread: %d.\n", current_thread);
 			return NULL;
 		}
