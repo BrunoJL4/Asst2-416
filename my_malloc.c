@@ -132,6 +132,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 		int firstSize = (char*) PageTable - (myBlock + sizeof(SegMetadata));
 		// set first SegMetadata
 		SegMetadata data = {BLOCK_FREE, firstSize, NULL};
+		// add first segment for myBlock here
+		*((SegMetadata*)myBlock) = data;
 
 
 	} //End of kernel setup and page creating
@@ -478,7 +480,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	}	
 	else if(req == LIBRARYREQ) {
 		thread = MAX_NUM_THREADS;
-		printf("Beginning mydeallocate for thread: %d\n", current_thread);
+//		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 		index = myBlock;
 		pagesize = kernelSize;
 	}

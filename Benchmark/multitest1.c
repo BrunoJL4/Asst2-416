@@ -10,24 +10,20 @@ void createAndWriteArr(void * arg){
 	
 	int arrSize = 10;
 	
+	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
 	int * arr = (int *)malloc(arrSize * sizeof(int));
 	
-	// Force context switch. 
-	// This means a different thread 
-	// will access pages it does not own.
-	// Signal Handler should handle this case. 
-	my_pthread_yield();
-	
+	printf("populating arr for thread %d\n", current_thread);
 	// Populate arr
 	int i;
 	for(i = 0; i < arrSize; i++){
-		arr[i] = arrSize;
+		arr[i] = current_thread;
 	}
 	
 	// Force context switch.
-	my_pthread_yield();
 	
+	printf("verifying arr for thread %d\n", current_thread);
 	// Verify arr has the same bytes we wrote into it. 
 	for(i = 0; i < arrSize; i++){
 		if(arr[i] != i){
@@ -35,10 +31,8 @@ void createAndWriteArr(void * arg){
 			return NULL;
 		}
 	}
-		
-	// Force context switch
-	my_pthread_yield();
 	
+	printf("freeing arr for thread %d\n", current_thread);
 	free(arr);
 	
 	
@@ -52,7 +46,7 @@ int main(int argc, char **argv){
 	printf("Testing threadTest1\n");
 	
 	// Amount of threads we want to test
-	int numberOfThreads = 5;
+	int numberOfThreads = 32;
 
 	// Holds the pointers to each child thread
 	pthread_t * threadPointers[numberOfThreads];
@@ -63,9 +57,10 @@ int main(int argc, char **argv){
 		if((my_pthread_create(&threadPointers[i], NULL, &createAndWriteArr, NULL)) == -1){
 			printf("Failed to create thread %d\n", i);
 		}
-		my_pthread_join(threadPointers[i], NULL);
+		printf("finished creating thread %d\n", i);
 	}
 	
+	printf("Finished Multithreading Test 1 successfully!\n");
 	
 	return 0;
 }

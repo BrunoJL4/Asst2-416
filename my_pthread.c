@@ -698,7 +698,7 @@ int runQueueHelper() {
 			// Do nothing here, since thread's status was already set
 		}
 		// if this context resumed and current status is THREAD_WAITING,
-		else if(current_status == THREAD_WAITING) {
+		else if(current_status == THREAD_WAITING || current_status == THREAD_YIELDED) {
 			// Do nothing here, since thread's status was already set
 		}
 		else if(current_status == THREAD_BLOCKED) {
@@ -793,7 +793,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		freePage = pageB;
 	}
 	// address of the buffer page
-	char *bufferPage = (char *)&myBlock + (TOTALMEM - PAGESIZE);
+	char *bufferPage = (char *) myBlock + (TOTALMEM - PAGESIZE);
 	// copy the data from pageA to bufferPage.
 	memcpy(bufferPage, pageAPtr, PAGESIZE);
 	// copy the data at page B's space, to page A's original space
