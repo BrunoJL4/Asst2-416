@@ -29,23 +29,23 @@ int main(int argc, char **argv){
 	}
 	// populate each of them
 	int i;
-	printf("populating firstArr, first interval!\n");
+//	printf("populating firstArr, first interval!\n");
 	for(i = 0; i < firstCount; i++) {
 		firstArr[i] = i;
 	}
-	printf("populating secondArr, first interval!\n");
+//	printf("populating secondArr, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		secondArr[i] = i;
 	}
 	// verify that their values are correct
-	printf("Verifying firstArr populated correctly, first interval!\n");
+//	printf("Verifying firstArr populated correctly, first interval!\n");
 	for(i = 0; i < firstCount; i++) {
 		if(firstArr[i] != i) {
 			printf("Error in test4! firstArr not correctly allocated for first interval.\n");
 			return 0;
 		}
 	}
-	printf("Verifying secondArr populated correctly, first interval!\n");
+//	printf("Verifying secondArr populated correctly, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		if(secondArr[i] != i) {
 			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
@@ -53,18 +53,18 @@ int main(int argc, char **argv){
 		}
 	}
 	// free firstArr, then check secondArr
-	printf("Attempting to free firstArr, first interval!\n");
+//	printf("Attempting to free firstArr, first interval!\n");
 	free(firstArr);
-	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
+//	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		if(secondArr[i] != i) {
 			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
 			return 0;
 		}
 	}
-	printf("Attempted to free secondArr, first interval!\n");
+//	printf("Attempted to free secondArr, first interval!\n");
 	free(secondArr);
-	printf("Successfully passed first interval!\n");
+//	printf("Successfully passed first interval!\n");
 	
 	// begin second part of the test, it's basically identical to
 	// the first part but with modified firstCount and secondCount values
@@ -82,23 +82,23 @@ int main(int argc, char **argv){
 		return 0;
 	}
 	// populate each of them
-	printf("populating firstArr, first interval!\n");
+//	printf("populating firstArr, first interval!\n");
 	for(i = 0; i < firstCount; i++) {
 		firstArr[i] = i;
 	}
-	printf("populating secoindArr, first interval!\n");
+//	printf("populating secoindArr, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		secondArr[i] = i;
 	}
 	// verify that their values are correct
-	printf("Verifying firstArr populated correctly, first interval!\n");
+//	printf("Verifying firstArr populated correctly, first interval!\n");
 	for(i = 0; i < firstCount; i++) {
 		if(firstArr[i] != i) {
 			printf("Error in test4! firstArr not correctly allocated for first interval.\n");
 			return 0;
 		}
 	}
-	printf("Verifying secondArr populated correctly, first interval!\n");
+//	printf("Verifying secondArr populated correctly, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		if(secondArr[i] != i) {
 			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
@@ -106,22 +106,18 @@ int main(int argc, char **argv){
 		}
 	}
 	// free firstArr, then check secondArr
-	printf("Attempting to free firstArr, first interval!\n");
+//	printf("Attempting to free firstArr, first interval!\n");
 	free(firstArr);
-	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
+//	printf("Verifying secondArr still fine after freeing firstArr, first interval!\n");
 	for(i = 0; i < secondCount; i++) {
 		if(secondArr[i] != i) {
 			printf("Error in test4! secondArr not correctly allocated for first interval.\n");
 			return 0;
 		}
 	}
-	printf("Attempted to free secondArr, first interval!\n");
+//	printf("Attempted to free secondArr, first interval!\n");
 	free(secondArr);
-	printf("Successfully passed first interval!\n");
-
-
-
-
+//	printf("Successfully passed second interval!\n");
 
 
 	printf("Finished test 3 successfully!\n");

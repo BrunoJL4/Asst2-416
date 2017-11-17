@@ -14,7 +14,7 @@ int main(int argc, char **argv){
 	int i;
 	// for each cell in ptrArr, add a pointer to the number of the
 	// allocation it was (starting at 0, going to maxVal - 1).
-	printf("Setting values in ptrArr!\n");
+//	printf("Setting values in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
 		int val = i;
 		int * pointer = (int*)malloc(sizeof(int));
@@ -22,14 +22,14 @@ int main(int argc, char **argv){
 		ptrArr[i] = pointer; 
 	}
 	// print out the value of each cell in ptrArr, make sure it's correct
-	printf("Printing out values in ptrArr!\n");
+//	printf("Printing out values in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
 		int val = i;
 		int *pointer = ptrArr[i];
 		printf("pointer's value should be %d; value is actually: %d\n", val, *pointer);
 	}
 	// free each item in ptrArr
-	printf("Attempting to free items in ptrArr!\n");
+//	printf("Attempting to free items in ptrArr!\n");
 	for(i = 0; i < maxVal; i++) {
 		printf("freeing ptrArr[%d]\n", i);
 		free(ptrArr[i]);

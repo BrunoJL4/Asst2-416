@@ -16,6 +16,7 @@ int main(int argc, char **argv){
 	free(pointer);
 
 	printf("Finished freeing pointer!\n");
+	printf("Finished test 1 successfully!\n");
 	
 	return 0;
 }

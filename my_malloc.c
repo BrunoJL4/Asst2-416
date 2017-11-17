@@ -233,7 +233,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// subtract 1 from the thread's remaining pages
 			threadNodeList[current_thread].pagesLeft -= 1;
 			numLocalPagesLeft -= 1;
-			int pagesize = PAGESIZE;
 			// Swap pages for first page to be page 0, ownerships swapped
 			// as well if applicable
 			if (freePage != 0) {
@@ -375,9 +374,11 @@ void* myallocate(int bytes, char * file, int line, int req){
 				ourPage = PageTable[ourPage].nextPage;
 				reqPages -= 1;
 			}
-			// Create SegMetadata if we didn't just add memory space to prev
+			// Create SegMetadata if we didn't just add memory space to prev...
+			// in the space provided, we need to consider the size of SegMetadata that ptr takes up in
+			// its initial space. recent fix.
 			if (((SegMetadata *)prev)->used == BLOCK_USED) {
-				SegMetadata data = { BLOCK_FREE, sizeReqPages * PAGESIZE, (SegMetadata *)prev };
+				SegMetadata data = { BLOCK_FREE, (sizeReqPages * PAGESIZE - sizeof(SegMetadata)), (SegMetadata *)prev };
 				*((SegMetadata *)ptr) = data;
 			}
 		}
