@@ -384,7 +384,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		
 		/* Part 4: If the entire segment is not used, then create free segment after the space used */
 		char * extraSeg = NULL;
-		if (bytes < (((SegMetadata *)ptr)->size - (sizeof(SegMetadata) + 1))) {
+		if (bytes < (int) ( ((SegMetadata *)ptr)->size - (sizeof(SegMetadata) + 1) ) ) {
 			// Create extra segment that is free... the extra space (for the new seg) is equal to the size
 			// of the segment, minus the size of the user's allocation, minus the size of another SegMetadata
 			int extraSpace = ((SegMetadata*)ptr)->size - bytes - sizeof(SegMetadata);
