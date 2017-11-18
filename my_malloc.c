@@ -109,7 +109,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		numLocalPagesLeft = maxThreadPages;
 		// swap file should have all pages open to start (16MB divided by 4kb)
 		numSwapPagesLeft = (16000000)/PAGESIZE;
-		PageTable = (PageMetadata *) (threadNodeList - (maxThreadPages * sizeof(PageMetadata)));
+		PageTable = (PageMetadata *) ((char *)threadNodeList - (maxThreadPages * sizeof(PageMetadata)));
 		// Go through PageTable and create the structs at each space, initializing their space
 		// to be FREE and having 0 space used.
 		for(i = 0; i < maxThreadPages; i++) {
