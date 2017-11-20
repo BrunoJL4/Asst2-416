@@ -8,7 +8,7 @@ void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 10;
+	int arrSize = 1000000;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
@@ -24,8 +24,6 @@ void createAndWriteArr(void * arg){
 	for(i = 0; i < arrSize; i++){
 		arr[i] = current_thread;
 	}
-	
-	// Force context switch.
 	
 	printf("verifying arr for thread %d\n", current_thread);
 	// Verify arr has the same bytes we wrote into it. 
@@ -44,7 +42,7 @@ void createAndWriteArr(void * arg){
 
 int main(int argc, char **argv){
 	
-	printf("Testing threadTest1\n");
+	printf("Testing Multithreading Test 1\n");
 	
 	// Amount of threads we want to test
 	int numberOfThreads = 32;
