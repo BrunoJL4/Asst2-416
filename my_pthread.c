@@ -394,8 +394,8 @@ int my_pthread_manager() {
 	// We only reach this point when maintenanceHelper()
 	// has set manager_active to 0. Leave the function.
 	// free MLPQ and tcbList
-	free(MLPQ);
-	free(tcbList);
+	mydeallocate(MLPQ, __FILE__, __LINE__, LIBRARYREQ);
+	mydeallocate(tcbList, __FILE__, __LINE__, LIBRARYREQ);
 	// free myBlock as well??? (can't use our own mydeallocate on
 	// myblock!)
 	//free(myBlock);
@@ -763,6 +763,7 @@ void SEGVhandler(int sig) {
 
 // TODO @bruno: let this deal with case where a page is free
 void swapPages(int pageA, int pageB, my_pthread_t curr) {
+	
 	int nextPageA, nextPageB;
 	// if the inputs are the same, leave
 	if(pageA == pageB) {
@@ -777,20 +778,28 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	char *pageAPtr = baseAddress + (pageA * PAGESIZE);
 	// get the address of page B
 	char *pageBPtr = baseAddress + (pageB * PAGESIZE);
-	// unprotect page A if it's not owned by curr OR if it's free
+	//freePage will represent if any pages were free prior to swap
+	//this will allow us to avoid setting data of previous page and prevPage member. 
 	int freePage = -1;
-	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE) {
+	// unprotect page A if it's not owned by curr OR if it's free
+	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE){
 		if(mprotect(pageAPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
 				exit(EXIT_FAILURE);
 		}
-		freePage = pageA;
+		//is pageA free?
+		if(PageTable[pageA].used == BLOCK_FREE){
+			freePage = pageA;
+		}
 	}
 	// unprotect Page B if it's not owned by curr OR if it's free
 	else if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
 		if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
 				exit(EXIT_FAILURE);
 		}
-		freePage = pageB;
+		//is pageB free?
+		if(PageTable[pageA].used == BLOCK_USED){
+			freePage = pageB;
+		}
 	}
 	// address of the buffer page
 	char *bufferPage = (char *) myBlock + (TOTALMEM - PAGESIZE);

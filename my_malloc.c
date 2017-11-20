@@ -53,11 +53,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 	sigprocmask(SIG_BLOCK, &signal, NULL);
 	memory_manager_active = 1;
     
-//	printf("Beginning myallocate(), current_thread is: %d\n", current_thread);
     
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
 	if(myBlock == NULL) {
-//		printf("Initializing kernel space in memory.\n");
 		
 		kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
 			+ (2 * MAX_NUM_THREADS * sizeof(tcb)) // tcb allocation
@@ -141,7 +139,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 	
 	// IF CALLED BY SCHEDULER
 	if(req == LIBRARYREQ){
-//		printf("Allocating segment for a kernel call.\n");
 		// get the first segment metadata (at the very beginning of myBlock)
 		char *currData = myBlock;
 		// iterate by pointer and size until we find a free segment big enough for
@@ -184,13 +181,11 @@ void* myallocate(int bytes, char * file, int line, int req){
 	        // PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
 	        memory_manager_active = 0;
 	        // unmask interrupts and return the pointer
-//		printf("Allocated %d bytes.\n", bytes);
 	        sigprocmask(SIG_UNBLOCK, &signal, NULL);
 	        return (void *)(currData + sizeof(SegMetadata));
 	}
 	//IF CALLED BY THREAD
 	else if(req == THREADREQ) {
-//		printf("Allocating segment for a user thread call.\n");
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
 		int reqPages = ceil(((double)bytes + sizeof(SegMetadata))/PAGESIZE);
@@ -430,7 +425,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		
 		/* Part 5: return pointer to user and end sigprocmask =^) */
 		memory_manager_active = 0;
-//		printf("Allocated %d bytes.\n", bytes);
 		sigprocmask(SIG_UNBLOCK, &signal, NULL);
 		return ptr + sizeof(SegMetadata);
 	}
@@ -450,10 +444,10 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	if(req == THREADREQ) {
 		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
 		while (ourPage != -1) {
-		// Swap pages into order
-		if (VMPage != ourPage) {
-			swapPages(VMPage, ourPage, current_thread);
-		}
+			// Swap pages into order
+			if (VMPage != ourPage) {
+				swapPages(VMPage, ourPage, current_thread);
+			}
 		VMPage++;
 		ourPage = PageTable[ourPage].nextPage;
 	}
