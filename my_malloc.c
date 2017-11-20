@@ -132,8 +132,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 		SegMetadata data = {BLOCK_FREE, firstSize, NULL};
 		// add first segment for myBlock here
 		*((SegMetadata*)myBlock) = data;
-
-
 	} //End of kernel setup and page creating
 
 	
@@ -246,7 +244,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				swapPages(0, freePage, current_thread);
 			}
 			// Give the first page a free segment
-			SegMetadata data = { BLOCK_FREE, (PAGESIZE * reqPages) - sizeof(SegMetadata), NULL };
+			SegMetadata data = { BLOCK_FREE, (PAGESIZE * numLocalPagesLeft) - sizeof(SegMetadata), NULL };
 			*((SegMetadata *)baseAddress) = data;
 			// Swap the rest of the pages that will be used into place
 			reqPages -= 1;
