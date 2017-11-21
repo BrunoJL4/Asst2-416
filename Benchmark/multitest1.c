@@ -8,11 +8,11 @@ void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 1000000;
+	int arrSize = 1500000;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
-	pthread_t * arr = (pthread_t *)malloc(arrSize * sizeof(pthread_t));
+	pthread_t * arr = (pthread_t *)malloc(arrSize * sizeof(int));
 	if(arr == NULL) {
 		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
 		return;
@@ -45,7 +45,7 @@ int main(int argc, char **argv){
 	printf("Testing Multithreading Test 1\n");
 	
 	// Amount of threads we want to test
-	int numberOfThreads = 32;
+	int numberOfThreads = 2;
 
 	// Holds the pointers to each child thread
 	pthread_t * threadPointers[numberOfThreads];

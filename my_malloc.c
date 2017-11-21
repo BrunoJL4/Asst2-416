@@ -244,7 +244,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				swapPages(0, freePage, current_thread);
 			}
 			// Give the first page a free segment
-			SegMetadata data = { BLOCK_FREE, (PAGESIZE * numLocalPagesLeft) - sizeof(SegMetadata), NULL };
+			SegMetadata data = { BLOCK_FREE, (PAGESIZE * reqPages) - sizeof(SegMetadata), NULL };
 			*((SegMetadata *)baseAddress) = data;
 			// Swap the rest of the pages that will be used into place
 			reqPages -= 1;
@@ -515,23 +515,24 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	// Check to see if the segment begins on the start of a page?
 	if(ptr == baseAddress + (pageIndex * PAGESIZE)){
 		// (segSize/PAGESIZE) floored when forced to int, this is intended
+		int segSize = ((SegMetadata *)ptr)->size;
 		threadNodeList[thread].pagesLeft += ((segSize + sizeof(SegMetadata))/PAGESIZE); 
 	}
 	// Segment begins in middle of page
 	else{
 		// Get amount of bytes till end of page
-		int bytesTillEnd = (baseAddress + ((pageIndex + 1) * PAGESIZE)) - ptr;
+		int bytesTillEnd = (baseAddress + ((pageIndex + 1) * PAGESIZE)) - (char *)ptr;
 		// (Block size - bytesTillEnd)/PAGESIZE floored when forced to int, this is intended
-		threadNodeList[thread].pagesLeft += ((((SegMetadata *)ptr)->size - bytesTillEnd)/PAGESIZE)	
+		threadNodeList[thread].pagesLeft += ((((SegMetadata *)ptr)->size - bytesTillEnd)/PAGESIZE);	
 	}
 	
 	// 4b: Determine how many pages the user's thread gets back from the next block
 	char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 	// Is the block free? 
-	if(((SegMetadta *)nextPtr)->used == BLOCK_FREE){
+	if(((SegMetadata *)nextPtr)->used == BLOCK_FREE){
 		char * endOfNextPtr = nextPtr + ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata);
 		// Check to see if free block goes until end of page (To count pages towards threads pagesLeft)
-		if(endOfNextPtr == baseAddress + ((pageIndex + 1) * PAGESIZE))){
+		if(endOfNextPtr == baseAddress + ((pageIndex + 1) * PAGESIZE)){
 			threadNodeList[thread].pagesLeft ++;
 		}
 	} 		
@@ -552,7 +553,8 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				// Index to the first memory address of pageIndex
 				char * endIndex = baseAddress + (endPageIndex * PAGESIZE);
 				// If the address the user is searching for belongs to this page, then break
-				if (nextPtr >= endIndex && nextPtr < endPageIndex + PAGESIZE) {
+				// TO DO: THIS SHOULD HAVE THE COMPILIER BITCHING SOOO LOOK AT THIS
+				if (nextPtr >= endIndex && nextPtr < (char *)(endPageIndex + PAGESIZE)) {
 					break;
 				}			
 				endPageIndex = PageTable[endPageIndex].nextPage;

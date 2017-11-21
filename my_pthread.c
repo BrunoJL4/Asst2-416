@@ -797,7 +797,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 				exit(EXIT_FAILURE);
 		}
 		//is pageB free?
-		if(PageTable[pageA].used == BLOCK_USED){
+		if(PageTable[pageB].used == BLOCK_FREE){
 			freePage = pageB;
 		}
 	}
