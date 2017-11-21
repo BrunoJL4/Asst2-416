@@ -466,7 +466,6 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	/* Part 2: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
 	if(req == THREADREQ) {
 		thread = current_thread;
-//		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 	
 		// Find the page of the memory address the user is trying to free
 		pageIndex = threadNodeList[thread].firstPage;
@@ -488,7 +487,6 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	}	
 	else if(req == LIBRARYREQ) {
 		thread = MAX_NUM_THREADS;
-//		printf("Beginning mydeallocate for thread: %d\n", current_thread);
 		index = myBlock;
 		pagesize = kernelSize;
 	}
@@ -511,27 +509,50 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 4: free the segment */	
 	((SegMetadata *)ptr)->used = BLOCK_FREE;
-	// determine how many pages the user's thread gets back... this might
-	// be off by 1, since i don't incorporate logic to see if the next segment is free
-	// TODO @all: this could be more precise.
-	int segSize = ((SegMetadata *)ptr)->size;
-	threadNodeList[thread].pagesLeft += ceil(segSize/PAGESIZE);
 	
+	
+	// 4a: Determines how many pages the user's thread gets back from freeing block
+	// Check to see if the segment begins on the start of a page?
+	if(ptr == baseAddress + (pageIndex * PAGESIZE)){
+		// (segSize/PAGESIZE) floored when forced to int, this is intended
+		threadNodeList[thread].pagesLeft += ((segSize + sizeof(SegMetadata))/PAGESIZE); 
+	}
+	// Segment begins in middle of page
+	else{
+		// Get amount of bytes till end of page
+		int bytesTillEnd = (baseAddress + ((pageIndex + 1) * PAGESIZE)) - ptr;
+		// (Block size - bytesTillEnd)/PAGESIZE floored when forced to int, this is intended
+		threadNodeList[thread].pagesLeft += ((((SegMetadata *)ptr)->size - bytesTillEnd)/PAGESIZE)	
+	}
+	
+	// 4b: Determine how many pages the user's thread gets back from the next block
+	char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+	// Is the block free? 
+	if(((SegMetadta *)nextPtr)->used == BLOCK_FREE){
+		char * endOfNextPtr = nextPtr + ((SegMetadata *)nextPtr)->size + sizeof(SegMetadata);
+		// Check to see if free block goes until end of page (To count pages towards threads pagesLeft)
+		if(endOfNextPtr == baseAddress + ((pageIndex + 1) * PAGESIZE))){
+			threadNodeList[thread].pagesLeft ++;
+		}
+	} 		
+	
+	
+	//TODO @all: When seeing if next ptr belongs to thread, program comes back -l
+	//           and as a result does not combine blocks w/ next block
 	/* Part 5: Combine segment with next segment if applicable or free */	
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
 	if (req == THREADREQ) {
 		// Check if it is in bounds of myBlock
-		if (((char *)ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) > (char *)(myBlock + (TOTALMEM - PAGESIZE))) {	
+		if (((char *)ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (char *)(myBlock + (TOTALMEM - PAGESIZE))) {	
 			// START OF CHECK
 			// First check if you'll stay in pages belonging to the thread
-			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 			// Find the page of the memory
 			int endPageIndex = threadNodeList[thread].firstPage;
 			while (endPageIndex != -1) {
 				// Index to the first memory address of pageIndex
 				char * endIndex = baseAddress + (endPageIndex * PAGESIZE);
 				// If the address the user is searching for belongs to this page, then break
-				if ((char *)nextPtr >= (char *)endIndex && (char *)nextPtr < (char *)(endPageIndex + PAGESIZE)) {
+				if (nextPtr >= endIndex && nextPtr < endPageIndex + PAGESIZE) {
 					break;
 				}			
 				endPageIndex = PageTable[endPageIndex].nextPage;
@@ -540,6 +561,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			if (endPageIndex != -1) {
 				// Confirmed next seg belongs to thread's page, so combine if free
 				if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
+					
 					((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
 					// If we are wiping memory, wipe memory of nextPtr SegMetadata here
 					
@@ -561,6 +583,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 6: Combine segment with previous segment if free */	
 	// If prev block is free, combine
+	// TODO @all: Does this free up another page? ++ on pagesLeft
 	if (((SegMetadata *)ptr)->prev != NULL) {
 		SegMetadata * prevPtr = ((SegMetadata *)ptr)->prev;
 		if (prevPtr->used == BLOCK_FREE) {
