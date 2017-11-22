@@ -20,7 +20,7 @@ they can be accessed by other libraries. */
 #define malloc(x) myallocate((x), __FILE__, __LINE__, THREADREQ)
 #define free(x) mydeallocate((x), __FILE__, __LINE__, THREADREQ)
 #define ceil(x) ourCeil((x))
-#define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes. 
+#define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes 
 #define THREADREQ 0 //User called
 #define LIBRARYREQ 1 //Library called
 #define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
@@ -57,7 +57,7 @@ typedef struct PageNode {
 	int nextPage;
 
 	/* Thread ID of the the thread owning this page. MAX_NUM_THREADS+1 by default.  */
-	my_pthread_t owner;
+	int owner;
 
 } PageMetadata;  
 

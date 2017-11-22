@@ -8,12 +8,11 @@ void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 1030141; //1,030,140 NO ERROR ON 2ND ALLOCATION
-						   //anything higher, gives error on 2nd allocation
+	int arrSize = 1500000;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
-	int * arr = (int *)malloc(arrSize * sizeof(int));
+	pthread_t * arr = (pthread_t *)malloc(arrSize * sizeof(int));
 	if(arr == NULL) {
 		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
 		return;

@@ -111,7 +111,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// to be FREE and having 0 space used.
 		for(i = 0; i < maxThreadPages; i++) {
 			// Make new PageMetadata struct and copy it to PageTable
-			PageMetadata newData = {BLOCK_FREE, -1, MAX_NUM_THREADS+1};
+			PageMetadata newData = {BLOCK_FREE, -1, -1};
 			PageTable[i] = newData;
 
 		}
@@ -622,11 +622,10 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				int indexer = (((long int) ((char*) ptr)) - ((long int)baseAddress))/PAGESIZE;
 				//int indexer = pageIndex; //This may be more proper
 				int after;
-				while (PageTable[indexer].nextPage != -1) {
+				while (indexer != -1) {
 					after = indexer;
 					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
-					printf("Page being set to free is:%d\n", indexer);
 					
 					// set the owner to -1
 					PageTable[indexer].owner = -1;
@@ -646,7 +645,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				// Remove all nextPage links
 				int indexer = ceil( ( ((char*) ptr) - baseAddress) / PAGESIZE);
 				int after;
-				while (PageTable[indexer].nextPage != -1) {
+				while (indexer != -1) {
 					after = indexer;
 					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
