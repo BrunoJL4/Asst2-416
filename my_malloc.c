@@ -595,7 +595,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			// and the prev block (which is free) starts before the start of 
 			// ptr's page;
 			char * startOfPtrPage = baseAddress + (pageIndex * PAGESIZE);
-			if(startOfPtrPage < ptr && startOfPtrPage > nextPtr){
+			if(startOfPtrPage < (char *)ptr && startOfPtrPage > nextPtr){
 				threadNodeList[thread].pagesLeft++;
 			}
 			// Set ptr to the front of the new free space
@@ -619,7 +619,8 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			// If ptr is the start of a page, free that page and onward
 			if ( ((long int) ( (char*) ptr)) % PAGESIZE == 0) {
 				// Remove all nextPage links
-				int indexer = ((SegMetadata* )ptr)->size/PAGESIZE;
+				int indexer = (((long int) ((char*) ptr)) - ((long int)baseAddress))PAGESIZE;
+				//int indexer = pageIndex; //This may be more proper
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
