@@ -584,13 +584,20 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 6: Combine segment with previous segment if free */	
 	// If prev block is free, combine
-	// TODO @all: If this free's up another page, we need to add it to the thread's pagesLeft member
 	if (((SegMetadata *)ptr)->prev != NULL) {
 		SegMetadata * prevPtr = ((SegMetadata *)ptr)->prev;
 		if (prevPtr->used == BLOCK_FREE) {
 			prevPtr->size += sizeof(SegMetadata) + ((SegMetadata *)ptr)->size;
 			// If we are wiping memory, wipe memory of ptr SegMetadata here 
 			
+			// If this free's up another page, we need to pagesLeft ++;
+			// Only scenario this can happen is if ptr starts mid-page
+			// and the prev block (which is free) starts before the start of 
+			// ptr's page;
+			char * startOfPtrPage = baseAddress + (pageIndex * PAGESIZE);
+			if(startOfPtrPage < ptr && startOfPtrPage > nextPtr){
+				threadNodeList[thread].pagesLeft++;
+			}
 			// Set ptr to the front of the new free space
 			ptr = (char *)prevPtr;
 		}
