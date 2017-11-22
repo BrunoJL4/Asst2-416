@@ -121,6 +121,12 @@ extern PageMetadata *PageTable;
 extern char *baseAddress;
 /* Tells us whether the memory manager is active */
 extern int memory_manager_active;
+/* Number of pages left in swap file */
+extern int numSwapPagesLeft;
+/* Number of pages left in myBlock */
+extern int numLocalPagesLeft;
+/* Global telling us how many pages each thread is allowed, at max. */
+extern int maxThreadPages;
 
 /* Our own functions below */
 

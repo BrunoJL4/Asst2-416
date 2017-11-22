@@ -12,7 +12,7 @@ void createAndWriteArr(void * arg){
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
-	pthread_t * arr = (pthread_t *)malloc(arrSize * sizeof(int));
+	int * arr = (int *)malloc(arrSize * sizeof(int));
 	if(arr == NULL) {
 		printf("ERROR! For thread %d, malloc() returned NULL!\n", current_thread);
 		return;

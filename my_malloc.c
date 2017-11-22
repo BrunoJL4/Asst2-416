@@ -513,8 +513,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		VMPage++;
 		ourPage = PageTable[ourPage].nextPage;
 	}
-	
-	}
+
 	/* Some declarations*/	
 	int thread;
 	int pageIndex;
