@@ -53,7 +53,6 @@ void* myallocate(int bytes, char * file, int line, int req){
 	sigprocmask(SIG_BLOCK, &signal, NULL);
 	memory_manager_active = 1;
     
-    
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
 	if(myBlock == NULL) {
 		
@@ -264,7 +263,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 					printf("ERROR in my_allocate! thread %d freePage >= maxThreadPages, 2!\n", current_thread);
 					sigprocmask(SIG_UNBLOCK, &signal, NULL);
 					return NULL;
-				}
+				}			
 				// Set the new page's attributes
 				PageTable[freePage].used = BLOCK_USED;
 				PageTable[freePage].owner = current_thread;
@@ -281,7 +280,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 				// Swap this page into order
 				if (freePage != replaceThisPage) {
 					swapPages(replaceThisPage, freePage, current_thread);
-				}
+				}		
 				// Decrement free pages left
 				numLocalPagesLeft -= 1;
 				// Replace the next page
@@ -289,6 +288,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 				reqPages -= 1;
 			}
 		}
+		
+		
 		
 		/* Part 2: Make sure pages are in order */
 		// where our page is supposed to be
@@ -314,6 +315,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			if (((SegMetadata *)ptr)->used == BLOCK_FREE && ((SegMetadata *)ptr)->size >= bytes) {
 				break;
 			}
+			
 			prev = ptr;
 			ptr += ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 		}
@@ -512,7 +514,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	
 	// 4a: Determines how many pages the user's thread gets back from freeing block
-	// Check to see if the segment begins on the start of a page?
+	// Check to see if the segment begins on the start of a page
 	if(ptr == baseAddress + (pageIndex * PAGESIZE)){
 		// (segSize/PAGESIZE) floored when forced to int, this is intended
 		int segSize = ((SegMetadata *)ptr)->size;
@@ -537,9 +539,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		}
 	} 		
 	
-	
-	//TODO @all: When seeing if next ptr belongs to thread, program comes back -l
-	//           and as a result does not combine blocks w/ next block
+
 	/* Part 5: Combine segment with next segment if applicable or free */	
 	// This is a user space combine, so we need to check if the next segment is in a page that belongs to this thread
 	if (req == THREADREQ) {
@@ -553,8 +553,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 				// Index to the first memory address of pageIndex
 				char * endIndex = baseAddress + (endPageIndex * PAGESIZE);
 				// If the address the user is searching for belongs to this page, then break
-				// TO DO: THIS SHOULD HAVE THE COMPILIER BITCHING SOOO LOOK AT THIS
-				if (nextPtr >= endIndex && nextPtr < (char *)(endPageIndex + PAGESIZE)) {
+				if (nextPtr >= endIndex && nextPtr < endIndex + PAGESIZE) {
 					break;
 				}			
 				endPageIndex = PageTable[endPageIndex].nextPage;
@@ -585,7 +584,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	/* Part 6: Combine segment with previous segment if free */	
 	// If prev block is free, combine
-	// TODO @all: Does this free up another page? ++ on pagesLeft
+	// TODO @all: If this free's up another page, we need to add it to the thread's pagesLeft member
 	if (((SegMetadata *)ptr)->prev != NULL) {
 		SegMetadata * prevPtr = ((SegMetadata *)ptr)->prev;
 		if (prevPtr->used == BLOCK_FREE) {
@@ -602,7 +601,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	// Only free pages if this is the user space
 	if (req == THREADREQ) {
 		// find some variables
-		char * nextPtr = ptr + sizeof(SegMetadata) + ((SegMetadata *)ptr)->size;
+		char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
 		int lastPage = threadNodeList[thread].firstPage;
 		while (PageTable[lastPage].nextPage != -1) {
 			lastPage = PageTable[lastPage].nextPage;
@@ -613,12 +612,14 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			// If ptr is the start of a page, free that page and onward
 			if ( ((long int) ( (char*) ptr)) % PAGESIZE == 0) {
 				// Remove all nextPage links
-				int indexer = (((long int) ( (char*) ptr)) - ((long int)baseAddress))/PAGESIZE;
+				int indexer = ((SegMetadata* )ptr)->size/PAGESIZE;
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
 					after = indexer;
 					// set the current block to free
 					PageTable[indexer].used = BLOCK_FREE;
+					printf("Page being set to free is:%d\n", indexer);
+					
 					// set the owner to -1
 					PageTable[indexer].owner = -1;
 					// increment the number of pages left in global VM
@@ -673,7 +674,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 
 /** Ceiling function - performs the ceil operation on a rational number**/
 int ourCeil(double num){
-	// if num % a roundedDown(num) outputes a decimal
+	// if num - a roundedDown(num) outputes a decimal
 	// higher than 0, round up, else round down and return. 
 	return num - (int)(num) > 0? (int)(num + 1) : (int)(num);
 	
