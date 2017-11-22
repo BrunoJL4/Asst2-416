@@ -619,7 +619,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 			// If ptr is the start of a page, free that page and onward
 			if ( ((long int) ( (char*) ptr)) % PAGESIZE == 0) {
 				// Remove all nextPage links
-				int indexer = (((long int) ((char*) ptr)) - ((long int)baseAddress))PAGESIZE;
+				int indexer = (((long int) ((char*) ptr)) - ((long int)baseAddress))/PAGESIZE;
 				//int indexer = pageIndex; //This may be more proper
 				int after;
 				while (PageTable[indexer].nextPage != -1) {
