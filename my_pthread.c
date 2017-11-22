@@ -752,6 +752,11 @@ void SEGVhandler(int sig) {
 	while (ourPage != -1) {
 		// Swap pages into order
 		if (VMPage != ourPage) {
+			// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
+			if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
+				numSwapPagesLeft++;
+				numLocalPagesLeft--;
+			}
 			swapPages(VMPage, ourPage, current_thread);
 		}
 		VMPage++;
@@ -774,10 +779,23 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		&& (PageTable[pageB].owner != curr && PageTable[pageB].used != BLOCK_USED)) {
 		exit(EXIT_FAILURE);
 	}
+	// either of these pages could be in the swapFile
 	// get the address of page A
-	char *pageAPtr = baseAddress + (pageA * PAGESIZE);
+	char * pageAPtr;
+	if (pageA >= maxThreadPages) {
+		pageAPtr = swapFile + ((pageA - maxThreadPages) * PAGESIZE);
+	} 
+	else {
+		pageAPtr = baseAddress + (pageA * PAGESIZE);
+	}
 	// get the address of page B
-	char *pageBPtr = baseAddress + (pageB * PAGESIZE);
+	char * pageBPtr;
+	if (pageB >= maxThreadPages) {
+		pageBPtr = swapFile + ((pageB - maxThreadPages) * PAGESIZE);
+	}
+	else {
+		pageBPtr = baseAddress + (pageB * PAGESIZE);
+	}
 	//freePage will represent if any pages were free prior to swap
 	//this will allow us to avoid setting data of previous page and prevPage member. 
 	int freePage = -1;

@@ -21,6 +21,7 @@ they can be accessed by other libraries. */
 #define free(x) mydeallocate((x), __FILE__, __LINE__, THREADREQ)
 #define ceil(x) ourCeil((x))
 #define TOTALMEM 8388608 //2^20 x 2^3 = 8 megabytes 
+#define SWAPMEM 16777216 // 16 megabytes
 #define THREADREQ 0 //User called
 #define LIBRARYREQ 1 //Library called
 #define PAGESIZE sysconf(_SC_PAGE_SIZE) //System page size
@@ -109,6 +110,7 @@ int ourCeil(double num);
 /* Will be accessed by scheduler for moving files around in
 SIGSEGV handler. */
 extern char *myBlock;
+extern char *swapFile;
 /* Will be accessed by scheduler for figuring out page ownership
 by thread, in SIGSEGV handler. */
 extern ThreadMetadata *threadNodeList;
