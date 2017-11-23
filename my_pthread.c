@@ -616,7 +616,6 @@ int runQueueHelper() {
 	if(runQueue == NULL) {
 		return -1;
 	}
-
 	// call signal handler for SIGVTALRM, which should activate
 	// each time we receive a SIGVTALRM
 	if(sigaction(SIGVTALRM, &sa, NULL) == -1) {
@@ -745,7 +744,7 @@ that isn't its own.
 void SEGVhandler(int sig) {
 	// TODO @bruno: refactor this for part C when we get to it.
 	// ez pz
-	if(manager_active == 1) {
+	if(memory_manager_active == 1) {
 		exit(EXIT_FAILURE);
 	}
 	/* Reorder all the pages all sneaky-like. */
@@ -971,6 +970,7 @@ int init_manager_thread() {
 	memset(&sa, 0, sizeof(sa));
 	// install VTALRMhandler as the signal handler for SIGVTALRM
 	sa.sa_handler = &VTALRMhandler;
+
 	// initialize the sigaction struct for seg faults
 	memset(&sig_mem, 0, sizeof(sig_mem));
 	// set signal mask so that SEGVhandler() ignores SIGVTALRM
@@ -978,10 +978,9 @@ int init_manager_thread() {
 	sigemptyset(&segv_handler_mask);
 	sigaddset(&segv_handler_mask, SIGVTALRM);
 	sig_mem.sa_mask = segv_handler_mask;
-	// set signal flag so it catches siginfo
-	sig_mem.sa_flags = SA_SIGINFO;
 	// install SEGVhandler() as the signal handler for SIGSEGV.
 	sig_mem.sa_handler = &SEGVhandler;
+
 	return 0;
 }
 
