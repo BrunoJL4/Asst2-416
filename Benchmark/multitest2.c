@@ -3,16 +3,23 @@
 #include <pthread.h>
 #include "../my_pthread_t.h"
 
-// This test checks how our library deals with threads consecutively
-// making large allocations, and freeing them directly after. It tests
-// sanitation between threads being freed/allocated.
+// This test checks how our library deals with threads making a number of
+// small allocations, and then reading from them in between being interrupted
+// and having their pages swapped around. It ends upon the user pressing CTRL+C
+// to terminate the process. We have free() statements, but none of them
+// should ever be reached.
 // NOTE! Please set MAX_NUM_THREADS in my_pthread_t.h to one value greater
 // than the numberOfThreads variable below.
+
+
+pthread_mutex_t   mutex;
+
+
 void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 1500000;
+	int arrSize = 16;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
@@ -28,13 +35,14 @@ void createAndWriteArr(void * arg){
 	for(i = 0; i < arrSize; i++){
 		arr[i] = current_thread;
 	}
-	
-	printf("verifying arr for thread %d\n", current_thread);
-	// Verify arr has the same bytes we wrote into it. 
-	for(i = 0; i < arrSize; i++){
-		if(arr[i] != current_thread){
-			printf("Verification failed, thread: %d.\n", current_thread);
-			return NULL;
+	while(1) {
+		//printf("verifying arr for thread %d\n", current_thread);
+		// Verify arr has the same bytes we wrote into it. 
+		for(i = 0; i < arrSize; i++){
+			if(arr[i] != current_thread){
+				printf("Verification failed, thread: %d.\n", current_thread);
+				return NULL;
+			}
 		}
 	}
 	
@@ -46,13 +54,15 @@ void createAndWriteArr(void * arg){
 
 int main(int argc, char **argv){
 	
-	printf("Testing Multithreading Test 1\n");
+	printf("Testing Multithreading Test 2\n");
 	
 	// Amount of threads we want to test
-	int numberOfThreads = 8;
+	int numberOfThreads = 2;
 
 	// Holds the pointers to each child thread
 	pthread_t * threadPointers[numberOfThreads];
+
+	pthread_mutex_init(&mutex, NULL);
 	
 	// Create child threads
 	int i;

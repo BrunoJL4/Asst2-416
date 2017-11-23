@@ -9,7 +9,7 @@
 
 #include "../my_pthread_t.h"
 
-#define DEFAULT_THREAD_NUM 2
+#define DEFAULT_THREAD_NUM 32
 
 #define VECTOR_SIZE 1000
 
@@ -19,7 +19,7 @@ pthread_mutex_t   mutex;
 
 int thread_num;
 
-int* counter;
+int counter[DEFAULT_THREAD_NUM];
 pthread_t *thread;
 
 int r[VECTOR_SIZE];
@@ -66,7 +66,6 @@ int main(int argc, char **argv) {
 	}
 
 	// initialize counter
-	counter = (int*)malloc(thread_num*sizeof(int));
 	for (i = 0; i < thread_num; ++i) {
 		counter[i] = i;
 		printf("counter[i] is: %d\n", counter[i]);
@@ -98,7 +97,6 @@ int main(int argc, char **argv) {
 
 	// Free memory on Heap
 	free(thread);
-	free(counter);
 
 	clock_gettime(CLOCK_MONOTONIC, &end);
     diff = BILLION * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec;

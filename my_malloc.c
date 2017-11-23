@@ -496,23 +496,6 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 
 	sigprocmask(SIG_BLOCK, &signal, NULL);
 	memory_manager_active = 1;
-	
-	/* Part 1: Make sure pages are in order */
-	int VMPage = 0;  // where our page is supposed to be
-	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
-	while (ourPage != -1) {
-		// Swap pages into order
-		if (VMPage != ourPage) {
-			// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
-			if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
-				numSwapPagesLeft++;
-				numLocalPagesLeft--;
-			}
-			swapPages(VMPage, ourPage, current_thread);
-		}
-		VMPage++;
-		ourPage = PageTable[ourPage].nextPage;
-	}
 
 	/* Some declarations*/	
 	int thread;
@@ -526,8 +509,24 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	ptr = ptr - sizeof(SegMetadata);
 	
 	
-	/* Part 2: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
+	/* Part 1: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
 	if(req == THREADREQ) {
+		/* Part 2: Make sure pages are in order, IF it's a thread request. */
+		int VMPage = 0;  // where our page is supposed to be
+			int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
+		while (ourPage != -1) {
+			// Swap pages into order
+			if (VMPage != ourPage) {
+				// If VMPage is free and ourPage is in the swapFile, then increment numSwapPagesLeft
+				if (PageTable[VMPage].used == BLOCK_FREE && ourPage >= maxThreadPages) {
+					numSwapPagesLeft++;
+					numLocalPagesLeft--;
+				}
+				swapPages(VMPage, ourPage, current_thread);
+			}
+			VMPage++;
+			ourPage = PageTable[ourPage].nextPage;
+		}
 		thread = current_thread;
 	
 		// Find the page of the memory address the user is trying to free
