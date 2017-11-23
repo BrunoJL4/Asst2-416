@@ -38,7 +38,7 @@ extern my_pthread_t current_thread;
 they can be accessed by other libraries. */
 #define MEM 16384 //Amount of memory used for a new context stack
 #define NUM_PRIORITY_LEVELS 5 //number of priority levels
-#define MAX_NUM_THREADS 3 //max number of threads allowed at once
+#define MAX_NUM_THREADS 33 //max number of threads allowed at once
 #define QUANTA_LENGTH 25
 
 /* Our own enums describing thread status. */

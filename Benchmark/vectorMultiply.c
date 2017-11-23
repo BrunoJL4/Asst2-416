@@ -9,7 +9,7 @@
 
 #include "../my_pthread_t.h"
 
-#define DEFAULT_THREAD_NUM 2
+#define DEFAULT_THREAD_NUM 32
 
 #define VECTOR_SIZE 1000
 
