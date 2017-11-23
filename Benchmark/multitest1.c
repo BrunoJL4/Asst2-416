@@ -49,7 +49,7 @@ int main(int argc, char **argv){
 	printf("Testing Multithreading Test 1\n");
 	
 	// Amount of threads we want to test
-	int numberOfThreads = 8;
+	int numberOfThreads = 2;
 
 	// Holds the pointers to each child thread
 	pthread_t * threadPointers[numberOfThreads];

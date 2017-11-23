@@ -232,13 +232,16 @@ void my_pthread_exit(void *value_ptr) {
 	//printf("(TARGET THREAD | ID = %d): my waiting value is: %d\n", tcbList[current_thread]->tid, tcbList[current_thread]->waitingThread);
 	
 	
-    // if thread was being waited on by another thread, set value_ptr 
+    // if thread was being waited on by another thread, set value_ptr and set the thread's status
     if(waitingThread != MAX_NUM_THREADS + 2) {
     	if(tcbList[waitingThread]->valuePtr != NULL) {
     		*(tcbList[waitingThread]->valuePtr) = value_ptr;
     	}
+    	tcbList[waitingThread]->status = THREAD_YIELDED;
     }
 	
+	tcbList[current_thread]->status = THREAD_DONE;
+	my_pthread_t prev_thread = current_thread;
     //swap back to the Manager context 
     current_thread = MAX_NUM_THREADS + 1;
     setcontext(&Manager);
@@ -254,11 +257,14 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
     if((tcbList[targetThread]) == NULL){
         return -1;
     }
-  
+    // what if target thread is done, but not freed/nulled yet?
+  	if(tcbList[targetThread]->status == THREAD_DONE) {
+  		return -1;
+  	}
     // set target thread's waitingThread to this thread.
 	// target thread will now be able to check if it's being waited on
     tcbList[targetThread]->waitingThread = current_thread;
-    tcbList[current_thread]->status = THREAD_YIELDED;
+    tcbList[current_thread]->status = THREAD_WAITING;
 	
 	// this for the runQueueHelper()'s reference
 	current_status = THREAD_WAITING;
@@ -386,9 +392,15 @@ int my_pthread_manager() {
 		if(maintenanceHelper() != 0) {
 			return -1;
 		}
+		if(manager_active == 0) {
+			break;
+		}
 		// perform run queue functions
 		if(runQueueHelper() != 0) {
 			return -1;
+		}
+		if(manager_active == 0) {
+			break;
 		}
 	}
 	// We only reach this point when maintenanceHelper()
@@ -584,12 +596,10 @@ int maintenanceHelper() {
 	if(runQueue == NULL) {
 		int mlpq_empty = 1;
 		// check and see if all queues in MLPQ are empty.
-		for(i = 0; i < sizeof(MLPQ); i++) {
+		for(i = 0; i < NUM_PRIORITY_LEVELS; i++) {
 			if(MLPQ[i] != NULL) {
-				break;
-			}
-			if(i == (sizeof(MLPQ) - 1)) {
 				mlpq_empty = 0;
+				break;
 			}
 		}
 		if(mlpq_empty == 1) {
@@ -665,7 +675,7 @@ int runQueueHelper() {
 		current_thread = currId;
 		// set current_exited to 0;
 		current_exited = 0;
-		printf("Swapping to thread %d\n", current_thread);
+	//	printf("Swapping to thread %d\n", current_thread);
 		// update child thread's uc_link to Manager
 		//tcbList[currId]->context.uc_link = &Manager;
 		swapcontext(&Manager, &(currTcb->context));
@@ -687,7 +697,6 @@ int runQueueHelper() {
 			currTcb->status = THREAD_DONE;
 			if(current_exited == 0) {
 				current_thread = tcbList[currId]->tid;
-				tcbList[current_thread]->waitingThread = MAX_NUM_THREADS + 2;
 				my_pthread_exit(NULL);
 			}
 		}
@@ -696,7 +705,7 @@ int runQueueHelper() {
 		// didn't get to run to completion.
 		else if(current_status == THREAD_INTERRUPTED){
 			// Do nothing here, since thread's status was already set
-			printf("Thread %d was interrupted!\n", currId);
+	//		printf("Thread %d was interrupted!\n", currId);
 		}
 		// if this context resumed and current status is THREAD_WAITING,
 		else if(current_status == THREAD_WAITING || current_status == THREAD_YIELDED) {
