@@ -675,7 +675,7 @@ int runQueueHelper() {
 		current_thread = currId;
 		// set current_exited to 0;
 		current_exited = 0;
-	//	printf("Swapping to thread %d\n", current_thread);
+		printf("Swapping to thread %d\n", current_thread);
 		// update child thread's uc_link to Manager
 		//tcbList[currId]->context.uc_link = &Manager;
 		swapcontext(&Manager, &(currTcb->context));
