@@ -444,7 +444,7 @@ int maintenanceHelper() {
 			// we insert the thread back into the MLPQ but at one lower
 			// priority level, also changing its priority member.
 			// then change its status to READY.
-			if(currTcb->priority < NUM_PRIORITY_LEVELS - 1){
+			if(currTcb->priority < NUM_PRIORITY_LEVELS){
 				currTcb->priority ++;
 			}
 			pnode *temp = currPnode;
@@ -1086,6 +1086,8 @@ void printList(pnode* input) {
 }
 
 void printMLPQ() {
+	printf("Traversing runQueue: \n");
+	printList(runQueue);
 	printf("Traversing MLPQ!\n");
 	int i = 0;
 	while (i < NUM_PRIORITY_LEVELS) {
