@@ -778,7 +778,21 @@ void SEGVhandler(int sig) {
 	if (fptr == NULL) {
 		fprintf(stderr, "Unable to open swap file.\n");
 	}
-	fread(swapFile, 1, SWAPMEM+1, fptr);
+	// Only read the file in, if one of the thread's pages is in the swap file,
+	// OR if the request is too large for local space
+	int swapIn = 0;
+	int possSwapPage = threadNodeList[current_thread].firstPage;
+	while(possSwapPage != -1) {
+		if(possSwapPage >= maxThreadPages) {
+			swapIn = 1;
+			break;
+		}
+		possSwapPage = PageTable[possSwapPage].nextPage;
+	}
+	if(swapIn == 1) {
+		// fread(buffer, sizeof(element), #ofElement, file)
+		fread(swapFile, 1, SWAPMEM+1, fptr);
+	}	
 		
 	int VMPage = 0;  // where our page is supposed to be
 	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
@@ -796,7 +810,10 @@ void SEGVhandler(int sig) {
 		ourPage = PageTable[ourPage].nextPage;
 	}
 	// Update the swap file and close
-	fwrite(swapFile, SWAPMEM+1, 1, fptr);
+	if(swapIn == 1) {
+		// fread(buffer, sizeof(element), #ofElement, file)
+		fread(swapFile, 1, SWAPMEM+1, fptr);
+	}
 	fclose(fptr);
 	
 	return;

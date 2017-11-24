@@ -228,7 +228,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		// since pages could be fragmented)
 		if(threadNodeList[current_thread].pagesLeft < reqPages) {
 			// Update the swap file and close
-			fwrite(swapFile, SWAPMEM, 1, fptr);
+			if(swapIn == 1) {
+				fwrite(swapFile, SWAPMEM+1, 1, fptr);
+			}
 			fclose(fptr);
 			memory_manager_active = 0;
 			printf("Thread %d is not allowed to allocate more pages!\n", current_thread);
@@ -242,7 +244,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 			if (reqPages > numLocalPagesLeft) {
 				if (reqPages > (numLocalPagesLeft + numSwapPagesLeft)) {
 					// Update the swap file and close
-					fwrite(swapFile, SWAPMEM+1, 1, fptr);
+					if(swapIn == 1) {
+						fwrite(swapFile, SWAPMEM+1, 1, fptr);
+					}
 					fclose(fptr);
 					memory_manager_active = 0;
 					printf("Thread %d can't get enough pages in virtual memory! Requested %d pages.\n", current_thread, reqPages);
@@ -283,7 +287,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 			// This case shouldn't happen, but we're just being safe =^)
 			if (freePage >= maxThreadPages) {
 				// Update the swap file and close
-				fwrite(swapFile, SWAPMEM, 1, fptr);
+				if(swapIn == 1) {
+					fwrite(swapFile, SWAPMEM+1, 1, fptr);
+				}
 				fclose(fptr);
 				memory_manager_active = 0;
 				printf("ERROR in my_allocate! freePage >= maxThreadPages, 1!\n", current_thread);
@@ -329,7 +335,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 				// This case shouldn't happen, but we're just being safe =^)
 				if (freePage >= maxThreadPages) {
 					// Update the swap file and close
-					fwrite(swapFile, SWAPMEM, 1, fptr);
+					if(swapIn == 1) {
+						fwrite(swapFile, SWAPMEM+1, 1, fptr);
+					}
 					fclose(fptr);
 					memory_manager_active = 0;
 					printf("ERROR in my_allocate! thread %d freePage >= maxThreadPages, 2!\n", current_thread);
@@ -415,7 +423,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 			if (reqPages > numLocalPagesLeft) {
 				if (reqPages > (numLocalPagesLeft + numSwapPagesLeft)) {
 					// Update the swap file and close
-					fwrite(swapFile, SWAPMEM, 1, fptr);
+					if(swapIn == 1) {
+						fwrite(swapFile, SWAPMEM+1, 1, fptr);
+					}
 					fclose(fptr);
 					// Not enough room
 					memory_manager_active = 0;
@@ -466,7 +476,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 				// within the thread's own virtual memory for the request
 				if (VMPage >= maxThreadPages) {
 					// Update the swap file and close
-					fwrite(swapFile, SWAPMEM, 1, fptr);
+					if(swapIn == 1) {
+						fwrite(swapFile, SWAPMEM+1, 1, fptr);
+					}
 					fclose(fptr);
 					memory_manager_active = 0;
 					printf("ERROR in my_allocate! thread %d VMPage >= maxThreadPages, not enough contiguous memory!\n", current_thread);
@@ -532,7 +544,9 @@ void* myallocate(int bytes, char * file, int line, int req){
 		((SegMetadata *)ptr)->used = BLOCK_USED;
 		
 		// Update the swap file and close
-		fwrite(swapFile, SWAPMEM, 1, fptr);
+		if(swapIn == 1) {
+			fwrite(swapFile, SWAPMEM+1, 1, fptr);
+		}
 		fclose(fptr);
 		
 		/* Part 5: return pointer to user and end sigprocmask =^) */
@@ -570,7 +584,20 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		if (fptr == NULL) {
 			fprintf(stderr, "Unable to open swap file.\n");
 		}
-		fread(swapFile, 1, SWAPMEM+1, fptr);
+		// Only read the file in, if one of the thread's pages is in the swap file,
+		int swapIn = 0;
+		int possSwapPage = threadNodeList[current_thread].firstPage;
+		while(possSwapPage != -1) {
+			if(possSwapPage >= maxThreadPages) {
+				swapIn = 1;
+				break;
+			}
+			possSwapPage = PageTable[possSwapPage].nextPage;
+		}
+		if(swapIn == 1) {
+			// fread(buffer, sizeof(element), #ofElement, file)
+			fread(swapFile, 1, SWAPMEM+1, fptr);
+		}	
 		
 		int VMPage = 0;  // where our page is supposed to be
 		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
@@ -589,8 +616,10 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 		}
 		thread = current_thread;
 		
-		// Update the swap file and close
-		fwrite(swapFile, SWAPMEM, 1, fptr);
+		// Update the swap file if it was updated
+		if(swapIn == 1) {
+			fwrite(swapFile, SWAPMEM, 1, fptr);
+		}
 		fclose(fptr);
 	
 		// Find the page of the memory address the user is trying to free
