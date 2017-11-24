@@ -37,9 +37,9 @@ void createAndWriteArr(void * arg){
 		arr[i] = current_thread;
 	}
 	while(1) {
-	//	printf("verifying arr for thread %d\n", current_thread);
-	//	printf("numLocalPagesLeft is: %d\n", numLocalPagesLeft);
-	//	printf("numSwapPagesLeft is: %d\n", numSwapPagesLeft);
+		printf("verifying arr for thread %d\n", current_thread);
+		printf("numLocalPagesLeft is: %d\n", numLocalPagesLeft);
+		printf("numSwapPagesLeft is: %d\n", numSwapPagesLeft);
 		// Verify arr has the same bytes we wrote into it. 
 		for(i = 0; i < arrSize; i++){
 			if(arr[i] != current_thread){

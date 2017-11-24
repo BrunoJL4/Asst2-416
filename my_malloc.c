@@ -62,9 +62,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 	// INITIALIZE KERNEL AND CREATE PAGE ABSTRACTION (FIRST MALLOC)
 	if(myBlock == NULL) {
 				
-		// Create the swap file, initialize its memory to empty
-		FILE * fptr = fopen("\\swapFile.txt", "w");
-		fprintf(fptr, "%0*d", SWAPMEM, '\0');
+		// Create the swap file
+		FILE * fptr = fopen("swapFile.txt", "w");
 		fclose(fptr);
 				
 		kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
@@ -196,13 +195,13 @@ void* myallocate(int bytes, char * file, int line, int req){
 	//IF CALLED BY THREAD
 	else if(req == THREADREQ) {
 		// Before continuing, load the char *swapFile
-		FILE * fptr = fopen("\\swapFile.txt", "r+"); //r+ for read and writing
+		FILE * fptr = fopen("swapFile.txt", "r+"); //r+ for read and writing
 		if (fptr == NULL) {
 			fprintf(stderr, "Unable to read swap file.\n");
 			exit(-1);
 		}
 		// fread(buffer, sizeof(element), #ofElement, file)
-		fread(swapFile, 1, SWAPMEM, fptr);	
+		fread(swapFile, 1, SWAPMEM+1, fptr);	
 		
 		/* Part 1: Checking if thread has pages, if not, assign pages */
 		// figure out how many pages the request will take
@@ -551,11 +550,11 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	/* Part 1: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
 	if(req == THREADREQ) {
 		/* Part 2: Make sure pages are in order, IF it's a thread request. */
-		FILE * fptr = fopen("\\swapFile.txt", "r+");
+		FILE * fptr = fopen("swapFile.txt", "r+");
 		if (fptr == NULL) {
 			fprintf(stderr, "Unable to open swap file.\n");
 		}
-		fread(swapFile, 1, SWAPMEM, fptr);
+		fread(swapFile, 1, SWAPMEM+1, fptr);
 		
 		int VMPage = 0;  // where our page is supposed to be
 		int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
