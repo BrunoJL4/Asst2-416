@@ -852,7 +852,8 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	}
 	//freePage will represent if any pages were free prior to swap
 	//this will allow us to avoid setting data of previous page and prevPage member. 
-	int freePage = -1;
+	int freePageA = -1;
+	int freePageB = -1;
 	// unprotect page A if it's not owned by curr OR if it's free
 	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE){
 		if(mprotect(pageAPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
@@ -860,17 +861,18 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		}
 		//is pageA free?
 		if(PageTable[pageA].used == BLOCK_FREE){
-			freePage = pageA;
+			freePageA = pageA;
 		}
 	}
+	
 	// unprotect Page B if it's not owned by curr OR if it's free
-	else if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
+	if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
 		if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
 				exit(EXIT_FAILURE);
 		}
 		//is pageB free?
 		if(PageTable[pageB].used == BLOCK_FREE){
-			freePage = pageB;
+			freePageB = pageB;
 		}
 	}
 	// address of the buffer page
@@ -898,7 +900,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	currPageA = -1;
 	currPageB = -1; 
 	// If A isn't a free page, iterate through and get the prev/next refs
-	if(freePage != pageA) {
+	if(freePageA != pageA) {
 		prevPageA = threadNodeList[owner_threadA].firstPage;
 		currPageA = prevPageA;
 		// Iterate through owner of target A until we reach target A.
@@ -909,7 +911,7 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		nextPageA = PageTable[currPageA].nextPage;
 	}
 	// If B isn't a free page, iterate through and get the prev/next refs
-	if(freePage != pageB) {
+	if(freePageB != pageB) {
 		prevPageB = threadNodeList[owner_threadB].firstPage;
 		currPageB = prevPageB;
 		// Iterate through owner of target B until we reach target B.
@@ -934,11 +936,11 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	// rectify itself on the next line.
 	// if pageA isn't free, then its prev/next references
 	// must be set accordingly. same for pageB.
-	if(freePage != pageA) {
+	if(freePageA != pageA) {
 		PageTable[prevPageA].nextPage = pageB;
 		PageTable[pageA].nextPage = nextPageB;
 	}
-	if(freePage != pageB) {
+	if(freePageB != pageB) {
 		PageTable[prevPageB].nextPage = pageA;
 		PageTable[pageB].nextPage = nextPageA;
 	}
