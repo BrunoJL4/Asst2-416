@@ -15,7 +15,8 @@
 char *myBlock = NULL;
 
 // This is the swapFile
-char *swapFile = NULL;
+char temp[TOTALMEM];
+char *swapFile = temp;
 
 /* This is the threadNodeList */
 ThreadMetadata *threadNodeList; 
@@ -64,6 +65,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 				
 		// Create the swap file
 		FILE * fptr = fopen("swapFile.txt", "w");
+		// Initialize it to all empty space (16MB worth)
+		fwrite(swapFile, SWAPMEM+1, 1, fptr);
 		fclose(fptr);
 				
 		kernelSize = (2 * MAX_NUM_THREADS * sizeof(pnode)) // pnodes allocation + buffer
@@ -194,18 +197,31 @@ void* myallocate(int bytes, char * file, int line, int req){
 	}
 	//IF CALLED BY THREAD
 	else if(req == THREADREQ) {
-		// Before continuing, load the char *swapFile
+		/* Part 1: Checking if thread has pages, if not, assign pages */
+		// figure out how many pages the request will take
+		int reqPages = ceil(((double)bytes + sizeof(SegMetadata))/PAGESIZE);
+
+		// Before continuing, load a file descriptor for swapFile.txt
 		FILE * fptr = fopen("swapFile.txt", "r+"); //r+ for read and writing
 		if (fptr == NULL) {
 			fprintf(stderr, "Unable to read swap file.\n");
 			exit(-1);
 		}
-		// fread(buffer, sizeof(element), #ofElement, file)
-		fread(swapFile, 1, SWAPMEM+1, fptr);	
-		
-		/* Part 1: Checking if thread has pages, if not, assign pages */
-		// figure out how many pages the request will take
-		int reqPages = ceil(((double)bytes + sizeof(SegMetadata))/PAGESIZE);
+		// Only read the file in, if one of the thread's pages is in the swap file,
+		// OR if the request is too large for local space
+		int swapIn = 0;
+		int possSwapPage = threadNodeList[current_thread].firstPage;
+		while(possSwapPage != -1) {
+			if(possSwapPage >= maxThreadPages) {
+				swapIn = 1;
+				break;
+			}
+			possSwapPage = PageTable[possSwapPage].nextPage;
+		}
+		if(swapIn == 1) {
+			// fread(buffer, sizeof(element), #ofElement, file)
+			fread(swapFile, 1, SWAPMEM+1, fptr);
+		}	
 
 		// check if we have enough pages left in the thread's space to accomodate
 		// the request (total pages... could still not have a big enough segment,
@@ -226,7 +242,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 			if (reqPages > numLocalPagesLeft) {
 				if (reqPages > (numLocalPagesLeft + numSwapPagesLeft)) {
 					// Update the swap file and close
-					fwrite(swapFile, SWAPMEM, 1, fptr);
+					fwrite(swapFile, SWAPMEM+1, 1, fptr);
 					fclose(fptr);
 					memory_manager_active = 0;
 					printf("Thread %d can't get enough pages in virtual memory! Requested %d pages.\n", current_thread, reqPages);

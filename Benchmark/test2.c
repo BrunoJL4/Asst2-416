@@ -8,7 +8,7 @@
 // allocations (allocating ints in this case) in a single thread.
 int main(int argc, char **argv){
 	// maxVal is however many allocations we want to test.
-	int maxVal = 100;
+	int maxVal = 10;
 	// store the pointers we allocate in ptrArr
 	int* ptrArr[maxVal];
 	int i;

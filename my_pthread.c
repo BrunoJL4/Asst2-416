@@ -774,7 +774,7 @@ void SEGVhandler(int sig) {
 		exit(EXIT_FAILURE);
 	}
 	/* Reorder all the pages all sneaky-like. */
-	FILE * fptr = fopen("swapFile.txt", "r+");
+	FILE * fptr = fopen("\\swapFile.txt", "r+");
 	if (fptr == NULL) {
 		fprintf(stderr, "Unable to open swap file.\n");
 	}
