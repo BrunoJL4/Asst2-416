@@ -230,6 +230,10 @@ pnode *createPnode(my_pthread_t tid);
 /* Performs time-slice calculation per level. */
 int level_slices(int level);
 
+/* Debugging purposes: traverses a pnode list and returns the tid
+for each node. */
+void printList(pnode* input);
+
 /* Inserts a given pnode into a given level of the MLPQ, such
 that it is the last node in that level's list (or first, if no others12
 are present). Returns 0 on failure, 1 on success. */

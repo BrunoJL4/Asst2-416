@@ -1076,3 +1076,23 @@ int level_slices(int level) {
 	}
 
 }
+
+void printList(pnode* input) {
+	printf("Traversing input pnode list!");
+	while(input != NULL) {
+		printf("tid: %d, ", input->tid);
+		input = input->next;
+	}
+}
+
+void printMLPQ() {
+	printf("Traversing MLPQ!\n");
+	int i = 0;
+	while (i < NUM_PRIORITY_LEVELS) {
+		printf("Traversing level %d: ", i);
+		printList(MLPQ[i]);
+		printf("\n");
+		i++;
+	}
+	printf("Finished traversal!\n");
+}
