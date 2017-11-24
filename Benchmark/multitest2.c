@@ -19,7 +19,8 @@ void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 16;
+	
+	int arrSize = 55000;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize
@@ -36,7 +37,9 @@ void createAndWriteArr(void * arg){
 		arr[i] = current_thread;
 	}
 	while(1) {
-		//printf("verifying arr for thread %d\n", current_thread);
+		printf("verifying arr for thread %d\n", current_thread);
+		printf("numLocalPagesLeft is: %d\n", numLocalPagesLeft);
+		printf("numSwapPagesLeft is: %d\n", numSwapPagesLeft);
 		// Verify arr has the same bytes we wrote into it. 
 		for(i = 0; i < arrSize; i++){
 			if(arr[i] != current_thread){
