@@ -444,7 +444,7 @@ int maintenanceHelper() {
 			// we insert the thread back into the MLPQ but at one lower
 			// priority level, also changing its priority member.
 			// then change its status to READY.
-			if(currTcb->priority < NUM_PRIORITY_LEVELS){
+			if(currTcb->priority < NUM_PRIORITY_LEVELS - 1){
 				currTcb->priority ++;
 			}
 			pnode *temp = currPnode;
@@ -576,8 +576,23 @@ int maintenanceHelper() {
 					currTcb->priority -= 1;
 					// set a temp ptr to the current thread
 					pnode *temp = curr;
-					// delink it from the current queue
-					prev->next = curr->next;
+					// delink it for one of two cases:
+					// first case: pnode is first node in queue
+					if(curr == MLPQ[i]) {
+						// set MLPQ[i]'s pointer to the next node
+						MLPQ[i] = MLPQ[i]->next;
+						// navigate to next part so that prev and currPnode
+						// both point to the beginning of updated MLPQ[i]
+						prev = MLPQ[i];
+						curr = MLPQ[i];
+					}
+					// second case: currPnode isn't first node in level (e.g. is
+					// in the middle or is the last node)
+					else{
+						// delink current node from MLPQ
+						prev->next = curr->next;
+						curr = curr->next;
+					}
 					// insert it into the next highest level
 					insertPnodeMLPQ(temp, currTcb->priority);
 				}
@@ -586,8 +601,10 @@ int maintenanceHelper() {
 					currTcb->cyclesWaited ++;
 				}
 			}
-			prev = curr;
-			curr = curr->next;
+			else{
+				prev = curr;
+				curr = curr->next;
+			}
 		}
 	}
 
