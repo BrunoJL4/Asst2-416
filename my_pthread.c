@@ -692,7 +692,7 @@ int runQueueHelper() {
 		current_thread = currId;
 		// set current_exited to 0;
 		current_exited = 0;
-		printf("Swapping to thread %d\n", current_thread);
+//		printf("Swapping to thread %d\n", current_thread);
 		// update child thread's uc_link to Manager
 		//tcbList[currId]->context.uc_link = &Manager;
 		swapcontext(&Manager, &(currTcb->context));
@@ -774,6 +774,12 @@ void SEGVhandler(int sig) {
 		exit(EXIT_FAILURE);
 	}
 	/* Reorder all the pages all sneaky-like. */
+	FILE * fptr = fopen("\\swapFile.txt", "r+");
+	if (fptr == NULL) {
+		fprintf(stderr, "Unable to open swap file.\n");
+	}
+	fread(swapFile, 1, SWAPMEM, fptr);
+		
 	int VMPage = 0;  // where our page is supposed to be
 	int ourPage = threadNodeList[current_thread].firstPage; // where our page actually is
 	while (ourPage != -1) {
@@ -789,6 +795,10 @@ void SEGVhandler(int sig) {
 		VMPage++;
 		ourPage = PageTable[ourPage].nextPage;
 	}
+	// Update the swap file and close
+	fwrite(swapFile, SWAPMEM, 1, fptr);
+	fclose(fptr);
+	
 	return;
 
 }
