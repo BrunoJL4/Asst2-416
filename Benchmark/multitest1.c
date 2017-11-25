@@ -12,7 +12,7 @@ void createAndWriteArr(void * arg){
 	
 	printf("Entering createAndWriteArr()\n");
 	
-	int arrSize = 1500000;
+	int arrSize = 120000;
 	
 	printf("allocating memory for thread %d\n", current_thread);
 	// Request arrSize

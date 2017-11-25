@@ -45,6 +45,10 @@ int maxThreadPages;
 /* Global telling us how many pages are in the swapfile */
 int maxSwapPages;
 
+/* Global telling us where sharedSpace is. */
+char *sharedSpace = NULL;
+
+
 
 /* End global variable declarations. */
 
@@ -579,6 +583,20 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	//Set ptr to point to its SegMetadata
 	ptr = ptr - sizeof(SegMetadata);
 	
+	/* Part 0: Handle free() logic for shared allocation. */
+	if((char*)ptr >= sharedSpace) {
+		// free the segment.
+		((SegMetadata *)ptr)->used = BLOCK_FREE;
+		// if there's any space left for a segment after it, and it's free, combine them.
+		if (((char *)ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata)) < (char *)(sharedSpace + PAGESIZE*4 - 1)) {
+			char * nextPtr = ptr + ((SegMetadata *)ptr)->size + sizeof(SegMetadata);
+			if (((SegMetadata *)nextPtr)->used == BLOCK_FREE) {
+				((SegMetadata *)ptr)->size += sizeof(SegMetadata) + ((SegMetadata *)nextPtr)->size;
+			}
+		}
+		// leave so we don't clash with other logic
+		return;
+	}
 	
 	/* Part 1: Set values for thread, pageIndex, index, and pagesize based on it being user or kernel threadspace */
 	if(req == THREADREQ) {
@@ -834,6 +852,65 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 	
 	return;
 
+}
+
+void *shalloc(int bytes) {
+	sigset_t signal;
+	sigemptyset(&signal);
+	sigaddset(&signal, SIGVTALRM);
+	sigprocmask(SIG_BLOCK, &signal, NULL);
+	memory_manager_active = 1;
+	if(sharedSpace == NULL) {
+		sharedSpace = (char*) myBlock + TOTALMEM - PAGESIZE*4;
+		// create segment for shared space
+		int sharedSize = PAGESIZE * 4 - sizeof(SegMetadata);
+		SegMetadata sharedData = {BLOCK_FREE, sharedSize, NULL};
+		*((SegMetadata*)sharedSpace) = sharedData;
+	}
+	// get the first segment metadata (at the very beginning of sharedSpace)
+	char *currData = sharedSpace;
+	// iterate by pointer and size until we find a free segment big enough for
+	// the allocation... don't go up to or past PageTable
+	while(currData < (char*)sharedSpace + PAGESIZE * 4) {
+		if(((SegMetadata *)currData)->used == BLOCK_FREE && ((SegMetadata *)currData)->size >= bytes) {
+			break;
+		}
+		currData += ((SegMetadata *)currData)->size + sizeof(SegMetadata);
+	}
+	// this shouldn't happen
+	if(currData >= (char*) sharedSpace + PAGESIZE * 4) {
+		printf("ERROR! Out of data in the shared space!\n");
+		sigprocmask(SIG_UNBLOCK, &signal, NULL);
+		return NULL;
+	}
+	// save that free segment's size, change the attribute to match bytes
+	int oldSegSize = ((SegMetadata *)currData)->size;
+	// set char *ret to match the actual first address of that segment
+	((SegMetadata *)currData)->size = bytes;
+	// set the return segment to BLOCK_USED
+	((SegMetadata *)currData)->used = BLOCK_USED;
+	// don't change currData's prev, because that's already correct
+	// if there's enough leftover space for the allocation, a NEW
+	// segment's metadata, AND at least one byte, create the new segment
+	if(oldSegSize > bytes + sizeof(SegMetadata) + 1) {
+		// create a new SegMetadata following that, which goes from
+		// the following/next free address to the end address
+		// in regards to size 
+		char *newData = currData + sizeof(SegMetadata) + ((SegMetadata *)currData)->size;
+		// size of the next segment will be oldSegSize - bytes - sizeof(SegMetadata)
+		SegMetadata data = {BLOCK_FREE, oldSegSize - (bytes + sizeof(SegMetadata)), (SegMetadata *)currData};
+		*((SegMetadata *) newData) = data;
+		char *nextData = newData + sizeof(SegMetadata) + ((SegMetadata *)newData)->size;
+		if( (char*) nextData < (char*) sharedSpace + PAGESIZE * 4 ) {
+			((SegMetadata *)nextData)->prev = (SegMetadata *)newData; 
+		}
+	}
+	// increase counter for memory allocated by kernel
+    // PageTable[MAX_NUM_THREADS].memoryAllocated += bytes;
+	memory_manager_active = 0;
+	// unmask interrupts and return the pointer
+	sigprocmask(SIG_UNBLOCK, &signal, NULL);
+	return (void *)(currData + sizeof(SegMetadata));	
 }
 
 /** Ceiling function - performs the ceil operation on a rational number**/

@@ -103,6 +103,8 @@ void *myallocate(int size, char *file, int line, int req);
 
 void mydeallocate(void *freeptr, char *file, int line, int req);
 
+void *shalloc(int bytes);
+
 int ourCeil(double num);
 
 /* Global variables. */
