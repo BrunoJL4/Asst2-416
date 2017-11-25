@@ -820,157 +820,123 @@ void SEGVhandler(int sig) {
 
 }
 
+
 // TODO @bruno: let this deal with case where a page is free
 void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	
-	int nextPageA, nextPageB;
-	// if the inputs are the same, leave
-	if(pageA == pageB) {
-		return;
-	}
-	// if neither page is currently USED and owned by the current thread, error
-	if((PageTable[pageA].owner != curr && PageTable[pageA].used != BLOCK_USED) 
-		&& (PageTable[pageB].owner != curr && PageTable[pageB].used != BLOCK_USED)) {
-		exit(EXIT_FAILURE);
-	}
-	// either of these pages could be in the swapFile
-	// get the address of page A
+	// STEP 1: Find the memory addresses of page A & B
 	char * pageAPtr;
+	char * pageBPtr;
 	if (pageA >= maxThreadPages) {
 		pageAPtr = swapFile + ((pageA - maxThreadPages) * PAGESIZE);
 	} 
 	else {
 		pageAPtr = baseAddress + (pageA * PAGESIZE);
 	}
-	// get the address of page B
-	char * pageBPtr;
 	if (pageB >= maxThreadPages) {
 		pageBPtr = swapFile + ((pageB - maxThreadPages) * PAGESIZE);
 	}
 	else {
 		pageBPtr = baseAddress + (pageB * PAGESIZE);
 	}
-	//freePage will represent if any pages were free prior to swap
-	//this will allow us to avoid setting data of previous page and prevPage member. 
-	int freePage = -1;
-	// unprotect page A if it's not owned by curr OR if it's free
-	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE){
-		if(mprotect(pageAPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
-		}
-		//is pageA free?
-		if(PageTable[pageA].used == BLOCK_FREE){
-			freePage = pageA;
-		}
-	}
-	// unprotect Page B if it's not owned by curr OR if it's free
-	else if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
-		if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
-		}
-		//is pageB free?
-		if(PageTable[pageB].used == BLOCK_FREE){
-			freePage = pageB;
-		}
-	}
-	// address of the buffer page
-	char *bufferPage = (char *) myBlock + (TOTALMEM - PAGESIZE);
-	// copy the data from pageA to bufferPage.
-	memcpy(bufferPage, pageAPtr, PAGESIZE);
-	// copy the data at page B's space, to page A's original space
-	memcpy(pageAPtr, pageBPtr, PAGESIZE);
-	// copy the data in bufferPage, to page B's original space.
-	memcpy(pageBPtr, bufferPage, PAGESIZE);
-	// Our objective is to "delink" pageA and pageB from one another's
-	// owning threads' references, by swapping their places.
-	// If one is a free page, though, we don't care about delinking it.
-	// Store the previous pages for Target A and B, the current pages we're at in the
-	// iterations, and the pages that follow Target A and B.
-	int prevPageA, prevPageB, currPageA, currPageB;
-	// Store the owners of Target A and B.
-	my_pthread_t owner_threadA, owner_threadB;
-	owner_threadA = PageTable[pageA].owner;
-	owner_threadB = PageTable[pageB].owner;
-	// Set these values to -1 by default. If they remain as -1, then
-	// their respective page is free.
-	prevPageA = -1;
-	prevPageB = -1;
-	currPageA = -1;
-	currPageB = -1; 
-	// If A isn't a free page, iterate through and get the prev/next refs
-	if(freePage != pageA) {
-		prevPageA = threadNodeList[owner_threadA].firstPage;
-		currPageA = prevPageA;
-		// Iterate through owner of target A until we reach target A.
-		while(currPageA != pageA) {
-			prevPageA = currPageA;
-			currPageA = PageTable[currPageA].nextPage;
-		}
-		nextPageA = PageTable[currPageA].nextPage;
-	}
-	// If B isn't a free page, iterate through and get the prev/next refs
-	if(freePage != pageB) {
-		prevPageB = threadNodeList[owner_threadB].firstPage;
-		currPageB = prevPageB;
-		// Iterate through owner of target B until we reach target B.
-		while(currPageB != pageB) {
-			prevPageB = currPageB;
-			currPageB = PageTable[currPageB].nextPage;
-		}
-		nextPageB = PageTable[currPageB].nextPage;
-	}
-	// if a non-free page is the first page of its owning thread,
-	// then set the owning thread's first page to the opposite
-	if(prevPageA == pageA && prevPageA != -1) {
-		threadNodeList[owner_threadA].firstPage = currPageB;
-	}
-	if(prevPageB == pageB && prevPageB != -1) {
-		threadNodeList[owner_threadB].firstPage = currPageA;
-	}
-	// delink/swap the pages from one another's lists. 
-	// this logic works even if pageA is the first page
-	// in its owner's list, and for pageB as well, because if
-	// we incorrectly set pageA's next page to pageB, that'll
-	// rectify itself on the next line.
-	// if pageA isn't free, then its prev/next references
-	// must be set accordingly. same for pageB.
-	if(freePage != pageA) {
-		PageTable[prevPageA].nextPage = pageB;
-		PageTable[pageA].nextPage = nextPageB;
-	}
-	if(freePage != pageB) {
-		PageTable[prevPageB].nextPage = pageA;
-		PageTable[pageB].nextPage = nextPageA;
-	}
-	// swap the pages' owners
-	PageTable[pageA].owner = owner_threadB;
-	PageTable[pageB].owner = owner_threadA;
-	// swap used/free status
-	int pageAUsedStatus = PageTable[pageA].used;
-	int pageBUsedStatus = PageTable[pageB].used;
-	PageTable[pageA].used = pageBUsedStatus;
-	PageTable[pageB].used = pageAUsedStatus;
-	// set the page protections correspondingly given the
-	// current thread and new page statuses
-	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE) {
-		if(mprotect(pageAPtr, PAGESIZE, PROT_NONE) == -1) {
-				exit(EXIT_FAILURE);
-		}
-	}
-	else if(PageTable[pageA].owner == curr) {
+	
+	// STEP 2: Unprotect pages we're about to swap if they can be unprotected
+	if (pageA < maxThreadPages) {
 		if(mprotect(pageAPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 	}
-
-	if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
-		if(mprotect(pageBPtr, PAGESIZE, PROT_NONE) == -1) {
-				exit(EXIT_FAILURE);
-		}
-	}
-	else if(PageTable[pageB].owner == curr) {
+	if (pageB < maxThreadPages) {
 		if(mprotect(pageBPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
+		}
+	}
+	
+	// STEP 3: Swap both pages in memory	
+	// Use the buffer
+	char * buffer = (char *) myBlock + (TOTALMEM - PAGESIZE);
+	memcpy(buffer, pageAPtr, PAGESIZE);
+	memcpy(pageAPtr, pageBPtr, PAGESIZE);
+	memcpy(pageBPtr, buffer, PAGESIZE);
+	// For clarity's sake, swap pageAPtr & pageBPtr
+	buffer = pageAPtr;
+	pageAPtr = pageBPtr;
+	pageBPtr = buffer;
+	
+	// STEP 4: Update PageTable and threadNodeList
+	int prevA = -1; // If this remains -1, then pageA is the firstPage
+	int prevB = -1;
+	int nextA = -1; // If this remains -1, then pageA is the lastPage
+	int nextB = -1;
+	int ptrAThread = -1; // Use this to find pageA
+	int ptrBThread = -1;
+	int firstPageA = -1; // This is set to the firstPage value if pageA is a first page
+	int firstPageB = -1;
+	
+	if (PageTable[pageA].owner != -1) {
+		ptrAThread = threadNodeList[PageTable[pageA].owner].firstPage;
+		// Check for firstPage
+		if (pageA == ptrAThread) {
+			firstPageA = ptrAThread;
+		}
+		
+		while (PageTable[ptrAThread].nextPage != -1) {
+			prevA = ptrAThread;
+			if (ptrAThread == pageA) {
+				nextA = PageTable[ptrAThread].nextPage;
+				break;
+			}
+			ptrAThread = PageTable[ptrAThread].nextPage;
+		}
+	}
+	
+	if (PageTable[pageB].owner != -1) {
+		ptrBThread = threadNodeList[PageTable[pageB].owner].firstPage;
+		if (pageB == ptrBThread) {
+			firstPageB = ptrBThread;
+		}
+		
+		while (PageTable[ptrBThread].nextPage != -1) {
+			prevB = ptrBThread;
+			if (ptrBThread == pageB) {
+				nextB = PageTable[ptrBThread].nextPage;
+				break;
+			}
+			ptrBThread = PageTable[ptrBThread].nextPage;
+		}
+	}
+	
+	// Set first pages
+	if (firstPageA != -1 && PageTable[pageA].owner != -1) {
+		threadNodeList[PageTable[pageA].owner].firstPage = pageB;
+	}
+	if (firstPageB != -1 && PageTable[pageB].owner != -1) {
+		threadNodeList[PageTable[pageB].owner].firstPage = pageA;
+	}
+	
+	// Swap page indexes and such in PageTable
+	int owner = PageTable[pageB].owner;
+	if (prevA != -1) {
+		PageTable[prevA].nextPage = pageB;
+	}
+	PageTable[pageB].nextPage = nextA;
+	PageTable[pageB].owner = PageTable[pageA].owner;
+	
+	if (prevB != -1) {
+		PageTable[prevB].nextPage = pageA;
+	}
+	PageTable[pageA].nextPage = nextB;
+	PageTable[pageA].owner = owner;
+	
+	// STEP 5: Protect Pages that do not belong to the owner
+	if (PageTable[pageA].owner != curr && pageA < maxThreadPages) {
+		if(mprotect(pageBPtr, PAGESIZE, PROT_NONE) == -1) {
+			exit(EXIT_FAILURE);
+		}
+	}	
+	if (PageTable[pageB].owner != curr && pageB < maxThreadPages) {
+		if(mprotect(pageAPtr, PAGESIZE, PROT_NONE) == -1) {
+			exit(EXIT_FAILURE);
 		}
 	}
 	
