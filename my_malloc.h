@@ -58,7 +58,7 @@ typedef struct PageNode {
 	int nextPage;
 
 	/* Thread ID of the the thread owning this page. MAX_NUM_THREADS+1 by default.  */
-	pthread_t owner;
+	int owner;
 
 } PageMetadata;  
 

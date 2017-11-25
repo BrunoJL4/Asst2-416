@@ -12,7 +12,7 @@ int main(int argc, char **argv){
 	// keep in mind that we'll be allocating a LOT of memory
 	// per char-allocation once we get to the higher numbers
 	// (100+).
-	int maxVal = 150;
+	int maxVal = 20;
 	// store the pointers we allocate in ptrArr. they have
 	// type void* as they will have different types.
 	void* ptrArr[maxVal];
