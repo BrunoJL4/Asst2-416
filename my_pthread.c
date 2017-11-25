@@ -856,19 +856,23 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	int freePageB = -1;
 	// unprotect page A if it's not owned by curr OR if it's free
 	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE){
-		if(mprotect(pageAPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
-		}
+		if(pageA < maxThreadPages){
+			if(mprotect(pageAPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+			}
+		}	
 		//is pageA free?
 		if(PageTable[pageA].used == BLOCK_FREE){
 			freePageA = pageA;
 		}
 	}
-	
+
 	// unprotect Page B if it's not owned by curr OR if it's free
 	if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
-		if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
+		if(pageB < maxThreadPages){
+			if(mprotect(pageBPtr, PAGESIZE, PROT_READ | PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+			}
 		}
 		//is pageB free?
 		if(PageTable[pageB].used == BLOCK_FREE){
@@ -955,24 +959,32 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	// set the page protections correspondingly given the
 	// current thread and new page statuses
 	if(PageTable[pageA].owner != curr || PageTable[pageA].used == BLOCK_FREE) {
-		if(mprotect(pageAPtr, PAGESIZE, PROT_NONE) == -1) {
-				exit(EXIT_FAILURE);
+		if(pageA < maxThreadPages){
+			if(mprotect(pageAPtr, PAGESIZE, PROT_NONE) == -1) {
+					exit(EXIT_FAILURE);
+			}
 		}
 	}
 	else if(PageTable[pageA].owner == curr) {
-		if(mprotect(pageAPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
+		if(pageA < maxThreadPages){
+			if(mprotect(pageAPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+			}
 		}
 	}
 
 	if(PageTable[pageB].owner != curr || PageTable[pageB].used == BLOCK_FREE) {
-		if(mprotect(pageBPtr, PAGESIZE, PROT_NONE) == -1) {
-				exit(EXIT_FAILURE);
+		if(pageB < maxThreadPages) {
+			if(mprotect(pageBPtr, PAGESIZE, PROT_NONE) == -1) {
+					exit(EXIT_FAILURE);
+			}
 		}
 	}
 	else if(PageTable[pageB].owner == curr) {
-		if(mprotect(pageBPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
-				exit(EXIT_FAILURE);
+		if(pageB < maxThreadPages) {
+			if(mprotect(pageBPtr, PAGESIZE, PROT_READ|PROT_WRITE) == -1) {
+					exit(EXIT_FAILURE);
+			}
 		}
 	}
 	
