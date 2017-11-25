@@ -774,7 +774,7 @@ void SEGVhandler(int sig) {
 		exit(EXIT_FAILURE);
 	}
 	/* Reorder all the pages all sneaky-like. */
-	FILE * fptr = fopen("\\swapFile.txt", "r+");
+	FILE * fptr = fopen("swapFile.txt", "r+");
 	if (fptr == NULL) {
 		fprintf(stderr, "Unable to open swap file.\n");
 	}
@@ -805,14 +805,15 @@ void SEGVhandler(int sig) {
 				numLocalPagesLeft--;
 			}
 			swapPages(VMPage, ourPage, current_thread);
+			ourPage = VMPage;
 		}
 		VMPage++;
 		ourPage = PageTable[ourPage].nextPage;
 	}
 	// Update the swap file and close
 	if(swapIn == 1) {
-		// fread(buffer, sizeof(element), #ofElement, file)
-		fread(swapFile, 1, SWAPMEM+1, fptr);
+		// write(buffer, sizeof(element), #ofElement, file)
+		fwrite(swapFile, 1, SWAPMEM+1, fptr);
 	}
 	fclose(fptr);
 	
@@ -881,11 +882,11 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		}
 		
 		while (PageTable[ptrAThread].nextPage != -1) {
-			prevA = ptrAThread;
 			if (ptrAThread == pageA) {
 				nextA = PageTable[ptrAThread].nextPage;
 				break;
 			}
+			prevA = ptrAThread;
 			ptrAThread = PageTable[ptrAThread].nextPage;
 		}
 	}
@@ -897,11 +898,11 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 		}
 		
 		while (PageTable[ptrBThread].nextPage != -1) {
-			prevB = ptrBThread;
 			if (ptrBThread == pageB) {
 				nextB = PageTable[ptrBThread].nextPage;
 				break;
 			}
+			prevB = ptrBThread;
 			ptrBThread = PageTable[ptrBThread].nextPage;
 		}
 	}
@@ -916,17 +917,21 @@ void swapPages(int pageA, int pageB, my_pthread_t curr) {
 	
 	// Swap page indexes and such in PageTable
 	int owner = PageTable[pageB].owner;
+	int used = PageTable[pageB].used;
+
 	if (prevA != -1) {
 		PageTable[prevA].nextPage = pageB;
 	}
 	PageTable[pageB].nextPage = nextA;
 	PageTable[pageB].owner = PageTable[pageA].owner;
-	
+	PageTable[pageB].used = PageTable[pageA].used;	
+
 	if (prevB != -1) {
 		PageTable[prevB].nextPage = pageA;
 	}
 	PageTable[pageA].nextPage = nextB;
 	PageTable[pageA].owner = owner;
+	PageTable[pageA].used = used;
 	
 	// STEP 5: Protect Pages that do not belong to the owner
 	if (PageTable[pageA].owner != curr && pageA < maxThreadPages) {

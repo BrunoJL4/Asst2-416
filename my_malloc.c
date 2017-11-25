@@ -274,6 +274,8 @@ void* myallocate(int bytes, char * file, int line, int req){
 					numToSwap--;
 					// one less free page in the swapFile
 					numSwapPagesLeft--;
+					// One more localPage
+					numLocalPagesLeft++;
 				}
 			}
 			int freePage = 0;
@@ -385,6 +387,7 @@ void* myallocate(int bytes, char * file, int line, int req){
 					numLocalPagesLeft--;
 				}
 				swapPages(VMPage, ourPage, current_thread);
+				ourPage = VMPage;
 			}
 			VMPage++;
 			ourPage = PageTable[ourPage].nextPage;
@@ -610,6 +613,7 @@ void mydeallocate(void *ptr, char *file, int line, int req){
 					numLocalPagesLeft--;
 				}
 				swapPages(VMPage, ourPage, current_thread);
+				ourPage = VMPage;
 			}
 			VMPage++;
 			ourPage = PageTable[ourPage].nextPage;
